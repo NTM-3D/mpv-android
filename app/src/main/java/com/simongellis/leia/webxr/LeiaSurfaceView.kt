@@ -39,12 +39,12 @@ open class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSu
         return textureRenderer.getSwapImages()
     }
 
-    fun setOverUnder(value: Boolean){
-        textureRenderer.setOverUnder(value)
+    fun setMode(value: Int) {
+        textureRenderer.setMode(value)
     }
 
-    fun getOverUnder(): Boolean{
-        return textureRenderer.getOverUnder()
+    fun getMode(): Int {
+        return textureRenderer.getMode()
     }
 
     override fun setRenderer(renderer: Renderer) {

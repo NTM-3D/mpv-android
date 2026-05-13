@@ -2029,7 +2029,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val filename = MPVLib.getPropertyString("filename") ?: ""
             val newFormat = detectLeiaFormat(filename)
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
-                eventUiHandler.post { Disable3D(); leiaEnabled = false }
+                eventUiHandler.post { player.setMode(0); Disable3D(); leiaEnabled = false }
             } else if (leiaEnabled) {
                 eventUiHandler.post { leiaEnabled = false }
             }
@@ -2041,7 +2041,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // the filename indicates a known 3D format.
             if (currentLeiaFormat != LeiaFormat.NONE) {
                 eventUiHandler.post {
-                    player.setOverUnder(currentLeiaFormat == LeiaFormat.HALF_TAB)
+                    player.setMode(if (currentLeiaFormat == LeiaFormat.HALF_TAB) 2 else 1)
                     mPrevDesiredBacklightModeState = true
                     Enable3D()
                     leiaEnabled = true

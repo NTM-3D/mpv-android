@@ -16,7 +16,8 @@ class LeiaTextureRenderer {
     private val textureHolders = mutableListOf<TextureHolder>()
     private var size = Size(640, 480)
     private var textureSize = Size(640, 480)
-    private var overUnder = false
+    // 0 = 2D passthrough, 1 = half-SBS, 2 = half-TAB
+    private var mode = 0
     private var swapImages = false
 
     private var program = -1
@@ -24,15 +25,15 @@ class LeiaTextureRenderer {
     private var texCoordLocation = -1
     private var mvLocation = -1
     private var texLocation = -1
-    private var overUnderLocation = -1
+    private var modeLocation = -1
     private var swapImagesLocation = -1
 
-    fun setOverUnder(value: Boolean) {
-        overUnder = value
+    fun setMode(value: Int) {
+        mode = value
     }
 
-    fun getOverUnder(): Boolean {
-        return overUnder
+    fun getMode(): Int {
+        return mode
     }
 
     fun setSwapImages(value: Boolean) {
@@ -68,7 +69,7 @@ class LeiaTextureRenderer {
         texCoordLocation = glGetAttribLocation(program, "a_TexCoord")
         mvLocation = glGetUniformLocation(program, "u_MV")
         texLocation = glGetUniformLocation(program, "u_Texture")
-        overUnderLocation = glGetUniformLocation(program, "u_OverUnder")
+        modeLocation = glGetUniformLocation(program, "u_Mode")
         swapImagesLocation = glGetUniformLocation(program, "u_SwapImages")
 
         Log.i(TAG, "swapImagesLocation: $swapImagesLocation")
@@ -116,8 +117,8 @@ class LeiaTextureRenderer {
         logError("bind tex location")
         glUniformMatrix4fv(mvLocation, 1, false, mv, 0)
         logError("bind mv location")
-        glUniform1i(overUnderLocation, (if (overUnder) 1 else 0))
-        logError("bind overUnder location")
+        glUniform1i(modeLocation, mode)
+        logError("bind mode location")
         glUniform1i(swapImagesLocation, (if (swapImages) 1 else 0))
         logError("bind swapImages location")
 
@@ -198,52 +199,41 @@ class LeiaTextureRenderer {
             precision mediump float;
             varying vec2 v_TexCoord;
             uniform samplerExternalOES u_Texture;
-            uniform int u_OverUnder;
+            uniform int u_Mode;
             uniform int u_SwapImages;
             void main() {
-                vec2 modifiedTexCoord = vec2(v_TexCoord.x, v_TexCoord.y);
-                
-                if (u_OverUnder == 1) {
-                    modifiedTexCoord.x = modifiedTexCoord.x * 2.0;
-                    
-                    
-                    if (u_SwapImages == 1){
-                        if(v_TexCoord.x > 0.5){
-                            modifiedTexCoord.x -= 1.0;
-                            // RIGHT EYE OUTPUT (from bottom of input)
-                            
-                            modifiedTexCoord.y *= 0.5;
-                            modifiedTexCoord.y += 0.05;
-                        }else{
-                            // LEFT EYE OUTPUT (from top of input)
-                            modifiedTexCoord.y = modifiedTexCoord.y * 0.5;
-                            modifiedTexCoord.y += 0.5;
-                        }
-                    }else{
-                        if(v_TexCoord.x > 0.5){
-                            modifiedTexCoord.x -= 1.0;
-                            // RIGHT EYE OUTPUT (from bottom of input)
-                            modifiedTexCoord.y = modifiedTexCoord.y * 0.5;
-                            modifiedTexCoord.y += 0.5;
-                        }else{
-                            // LEFT EYE OUTPUT (from top of input)
-                            modifiedTexCoord.y *= 0.5;
-                            modifiedTexCoord.y += 0.05;
-                            
-                            // clamp between 0 and 1
-                            modifiedTexCoord.y = max(modifiedTexCoord.y, 0.0);
-                            modifiedTexCoord.y = min(modifiedTexCoord.y, 1.0);
-                        }
+                vec2 coord = v_TexCoord;
+
+                if (u_Mode == 1) {
+                    // Half-SBS: left half = left eye, right half = right eye
+                    if (u_SwapImages == 1) {
+                        coord.x = mod(coord.x + 0.5, 1.0);
                     }
-                }else{
-                    // SBS
-                    if(u_SwapImages == 1){
-                        // shift and wrap around to swap images
-                        modifiedTexCoord.x = mod(modifiedTexCoord.x + 0.5, 1.0);
+                } else if (u_Mode == 2) {
+                    // Half-TAB: top half = left eye, bottom half = right eye
+                    if (u_SwapImages == 1) {
+                        if (v_TexCoord.x > 0.5) {
+                            coord.x -= 0.5;
+                            coord.x *= 2.0;
+                            coord.y = coord.y * 0.5;
+                        } else {
+                            coord.x *= 2.0;
+                            coord.y = coord.y * 0.5 + 0.5;
+                        }
+                    } else {
+                        if (v_TexCoord.x > 0.5) {
+                            coord.x -= 0.5;
+                            coord.x *= 2.0;
+                            coord.y = coord.y * 0.5 + 0.5;
+                        } else {
+                            coord.x *= 2.0;
+                            coord.y = coord.y * 0.5;
+                        }
                     }
                 }
-                
-                gl_FragColor = texture2D(u_Texture, modifiedTexCoord);
+                // u_Mode == 0: passthrough, coord unchanged
+
+                gl_FragColor = texture2D(u_Texture, coord);
                 if (gl_FragColor.a < 0.1) {
                     discard;
                 }
