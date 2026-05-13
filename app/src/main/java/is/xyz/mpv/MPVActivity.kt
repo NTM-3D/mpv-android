@@ -58,11 +58,23 @@ import kotlin.math.roundToInt
 typealias ActivityResultCallback = (Int, Intent?) -> Unit
 typealias StateRestoreCallback = () -> Unit
 
+enum class LeiaFormat { NONE, HALF_SBS, HALF_TAB }
+
+fun detectLeiaFormat(filename: String): LeiaFormat {
+    val name = filename.lowercase()
+    return when {
+        name.contains("half_2x1") || name.contains("hsbs") -> LeiaFormat.HALF_SBS
+        name.contains("half_1x2") || name.contains("htab") -> LeiaFormat.HALF_TAB
+        else -> LeiaFormat.NONE
+    }
+}
+
 class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObserver {
     // Leia
     private var mPrevDesiredBacklightModeState = false
     private lateinit var sdk: LeiaSDK
     private var leiaEnabled = false
+    private var currentLeiaFormat = LeiaFormat.NONE
 
     // for calls to eventUi() and eventPropertyUi()
     private val eventUiHandler = Handler(Looper.getMainLooper())
@@ -2012,15 +2024,28 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
 
             playbackHasStarted = true
+
+            // Detect 3D format for the new file; disable 3D if previous file had it
+            val filename = MPVLib.getPropertyString("filename") ?: ""
+            val newFormat = detectLeiaFormat(filename)
+            if (leiaEnabled && newFormat == LeiaFormat.NONE) {
+                eventUiHandler.post { Disable3D(); leiaEnabled = false }
+            } else if (leiaEnabled) {
+                eventUiHandler.post { leiaEnabled = false }
+            }
+            currentLeiaFormat = newFormat
         }
 
         if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART && !leiaEnabled) {
-            // Enable 3D only once mpv is actively rendering frames — same state
-            // as when user would press the 3D button in the reference app.
-            eventUiHandler.post {
-                mPrevDesiredBacklightModeState = true
-                Enable3D()
-                leiaEnabled = true
+            // Enable 3D only once mpv is actively rendering frames, and only when
+            // the filename indicates a known 3D format.
+            if (currentLeiaFormat != LeiaFormat.NONE) {
+                eventUiHandler.post {
+                    player.setOverUnder(currentLeiaFormat == LeiaFormat.HALF_TAB)
+                    mPrevDesiredBacklightModeState = true
+                    Enable3D()
+                    leiaEnabled = true
+                }
             }
         }
 
