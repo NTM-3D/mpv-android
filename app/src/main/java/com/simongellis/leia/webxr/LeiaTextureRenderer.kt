@@ -275,9 +275,7 @@ class LeiaTextureRenderer {
         val y01 = mapTransformY(transform, 0f, 1f)
         val y10 = mapTransformY(transform, 1f, 0f)
         val y11 = mapTransformY(transform, 1f, 1f)
-        val minY = minOf(y00, y01, y10, y11)
-        val maxY = maxOf(y00, y01, y10, y11)
-        return Pair(minY, maxY)
+        return Pair(minOf(y00, y01, y10, y11), maxOf(y00, y01, y10, y11))
     }
 
     private class TextureHolder(private val texture: SurfaceTexture, val transform: FloatArray) {
@@ -348,27 +346,32 @@ class LeiaTextureRenderer {
                         coord.x = mod(coord.x + 0.5, 1.0);
                     }
                 } else if (u_Mode == 2) {
-                    // Half-TAB to SBS using transform-derived active Y window and
-                    // codec/display correction for padded heights.
-                    float span = max(u_ActiveYMax - u_ActiveYMin, 0.00001);
-                    float eyeSpan = max(span * 0.5 * u_VideoFraction, 0.00001);
-                    float split = u_ActiveYMin + eyeSpan;
-                    float eps = min(u_TexelSizeY * span, eyeSpan * 0.25);
+                    // Half-TAB to SBS in flipped display space (same space as visible output).
+                    float activeYMin = 1.0 - u_ActiveYMax;
+                    float activeYMax = 1.0 - u_ActiveYMin;
+                    float span = max(activeYMax - activeYMin, 0.00001);
+                    float halfSpan = span * 0.5;
+                    float sourceSpan = max(halfSpan * u_VideoFraction, 0.00001);
+                    float inset = max((halfSpan - sourceSpan) * 0.5, 0.0);
+                    float topStart = activeYMin + inset;
+                    float bottomStart = activeYMin + halfSpan + inset;
+                    float eps = min(u_TexelSizeY * span, sourceSpan * 0.25);
+                    float sampleSpan = max(sourceSpan - 2.0 * eps, 0.00001);
                     if (u_SwapImages == 0) {
                         if (v_TexCoord.x < 0.5) {
                             coord.x = v_TexCoord.x * 2.0;
-                            coord.y = u_ActiveYMin + v_TexCoord.y * max(eyeSpan - eps, 0.00001);
+                            coord.y = (topStart + eps) + v_TexCoord.y * sampleSpan;
                         } else {
                             coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = (split + eps) + v_TexCoord.y * max(eyeSpan - 2.0 * eps, 0.00001);
+                            coord.y = (bottomStart + eps) + v_TexCoord.y * sampleSpan;
                         }
                     } else {
                         if (v_TexCoord.x < 0.5) {
                             coord.x = v_TexCoord.x * 2.0;
-                            coord.y = (split + eps) + v_TexCoord.y * max(eyeSpan - 2.0 * eps, 0.00001);
+                            coord.y = (bottomStart + eps) + v_TexCoord.y * sampleSpan;
                         } else {
                             coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = u_ActiveYMin + v_TexCoord.y * max(eyeSpan - eps, 0.00001);
+                            coord.y = (topStart + eps) + v_TexCoord.y * sampleSpan;
                         }
                     }
                 } else if (u_Mode == 3) {
