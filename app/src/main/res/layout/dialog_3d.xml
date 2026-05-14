@@ -5,11 +5,18 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <RadioGroup
-        android:id="@+id/modeGroup"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <RadioGroup
+            android:id="@+id/modeGroup"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
 
         <RadioButton
             android:id="@+id/modeFullSbs"
@@ -29,7 +36,17 @@
             android:layout_height="wrap_content"
             android:text="@string/mode_half_tab" />
 
-    </RadioGroup>
+        </RadioGroup>
+
+        <Button
+            android:id="@+id/swapEyesBtn"
+            style="@style/Widget.AppCompat.Button.Borderless.Colored"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/btn_swap_eyes" />
+
+    </LinearLayout>
 
     <View
         android:layout_width="match_parent"

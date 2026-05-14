@@ -296,7 +296,7 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
         MPVLib.removeObserver(o)
     }
 
-    data class Track(val mpvId: Int, val name: String)
+    data class Track(val mpvId: Int, val name: String, val codec: String? = null)
     var tracks = mapOf<String, MutableList<Track>>(
             "audio" to arrayListOf(),
             "video" to arrayListOf(),
@@ -320,6 +320,7 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
             val mpvId = MPVLib.getPropertyInt("track-list/$i/id") ?: continue
             val lang = MPVLib.getPropertyString("track-list/$i/lang")
             val title = MPVLib.getPropertyString("track-list/$i/title")
+            val codec = MPVLib.getPropertyString("track-list/$i/codec")
 
             val trackName = if (!lang.isNullOrEmpty() && !title.isNullOrEmpty())
                 context.getString(R.string.ui_track_title_lang, mpvId, title, lang)
@@ -329,7 +330,8 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
                 context.getString(R.string.ui_track, mpvId)
             tracks.getValue(type).add(Track(
                     mpvId=mpvId,
-                    name=trackName
+                    name=trackName,
+                    codec=codec
             ))
         }
     }
