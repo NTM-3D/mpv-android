@@ -38,6 +38,7 @@ import androidx.core.content.ContextCompat
 import android.view.*
 import android.view.ViewGroup.MarginLayoutParams
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.addCallback
@@ -90,7 +91,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
     private var subtitleBitmap: Bitmap? = null
-    private var lastImageSubtitleCaptureMs = 0L
     // Codec dimensions for HTAB eye-split correction (H.264 aligns heights to 16 rows).
     private var videoCodecH = 0
     private var videoDisplayH = 0
@@ -1947,10 +1947,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun eventPropertyUi(property: String, value: Long) {
         if (!activityIsForeground) return
         when (property) {
-            "time-pos" -> {
-                updatePlaybackPos(psc.positionSec)
-                updateImageSubtitleBitmap(false)
-            }
+            "time-pos" -> updatePlaybackPos(psc.positionSec)
             "playlist-pos", "playlist-count" -> updatePlaylistButtons()
             "video-params/h" -> {
                 videoCodecH = value.toInt()
@@ -2345,8 +2342,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val textCanvas = Canvas(textLayer)
         layout.draw(textCanvas)
 
-        // Halve previous bottom distance (96dp -> 48dp).
-        val bottomMargin = (48f * resources.displayMetrics.density).roundToInt()
+        // Move to 65% of current distance (48dp baseline -> 31.2dp).
+        val bottomMargin = (48f * 0.65f * resources.displayMetrics.density).roundToInt()
         val left = ((width - textWidth) / 2f)
         val dstHeight = (layout.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
         val top = (height - bottomMargin - dstHeight).coerceAtLeast(0)
@@ -2381,26 +2378,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                codec.contains("xsub")
     }
 
-    private fun updateImageSubtitleBitmap(force: Boolean = false) {
-        if (!stereoSubtitleModeEnabled || !isImageSubtitleTrackSelected())
-            return
-        val now = SystemClock.uptimeMillis()
-        if (!force && now - lastImageSubtitleCaptureMs < 200L)
-            return
-        lastImageSubtitleCaptureMs = now
-
-        val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
-        val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
-        MPVLib.setPropertyBoolean("sub-visibility", true)
-        val bmp = MPVLib.grabSubtitleBitmap(width, height)
-        MPVLib.setPropertyBoolean("sub-visibility", false)
-        if (bmp != null) {
-            subtitleBitmap?.recycle()
-            subtitleBitmap = bmp
-            player.setStereoSubtitleBitmap(subtitleBitmap)
-        }
-    }
-
     private fun persistSubtitleDepth() {
         getDefaultSharedPreferences(applicationContext).edit()
             .putInt("subtitle_depth_3d", subtitleDepth)
@@ -2410,19 +2387,23 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun updateStereoSubtitleMode() {
         val shouldEnableStereoSubs = isSbs3DActive() && player.sid != -1
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
-        MPVLib.setPropertyBoolean("sub-visibility", !shouldEnableStereoSubs)
-        player.setStereoSubtitleEnabled(shouldEnableStereoSubs)
+        val imageTrack = shouldEnableStereoSubs && isImageSubtitleTrackSelected()
+        MPVLib.setPropertyBoolean("sub-visibility", imageTrack || !shouldEnableStereoSubs)
+        player.setStereoSubtitleEnabled(shouldEnableStereoSubs && !imageTrack)
         if (!shouldEnableStereoSubs) {
             subtitleBitmap?.recycle()
             subtitleBitmap = null
             player.setStereoSubtitleBitmap(null)
             return
         }
+        if (imageTrack) {
+            subtitleBitmap?.recycle()
+            subtitleBitmap = null
+            player.setStereoSubtitleBitmap(null)
+            return
+        }
         applySubtitleDepth(subtitleDepth)
-        if (isImageSubtitleTrackSelected())
-            updateImageSubtitleBitmap(true)
-        else
-            updateStereoSubtitleText(currentSubText)
+        updateStereoSubtitleText(currentSubText)
     }
 
     private fun toggle3D() {
@@ -2454,7 +2435,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val modeFullSbs = dialogView.findViewById<android.widget.RadioButton>(R.id.modeFullSbs)
         val modeHalfSbs = dialogView.findViewById<android.widget.RadioButton>(R.id.modeHalfSbs)
         val modeHalfTab = dialogView.findViewById<android.widget.RadioButton>(R.id.modeHalfTab)
-        val swapEyesBtn = dialogView.findViewById<Button>(R.id.swapEyesBtn)
+        val swapEyesCheck = dialogView.findViewById<CheckBox>(R.id.swapEyesCheck)
         val depthSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.depthSeekBar)
         val depthValue = dialogView.findViewById<android.widget.TextView>(R.id.depthValue)
 
@@ -2469,14 +2450,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // Restore saved depth
         depthSeekBar.progress = subtitleDepth + 10
         depthValue.text = if (subtitleDepth >= 0) "+$subtitleDepth" else "$subtitleDepth"
-        fun updateSwapLabel() {
-            val state = if (player.getSwapImages()) getString(R.string.dialog_yes) else getString(R.string.dialog_no)
-            swapEyesBtn.text = "${getString(R.string.btn_swap_eyes)}: $state"
-        }
-        updateSwapLabel()
-        swapEyesBtn.setOnClickListener {
-            player.setSwapImages(!player.getSwapImages())
-            updateSwapLabel()
+        swapEyesCheck.isChecked = player.getSwapImages()
+        swapEyesCheck.setOnCheckedChangeListener { _, isChecked ->
+            player.setSwapImages(isChecked)
         }
 
         depthSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
@@ -2515,6 +2491,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             create()
         }
         dialog.show()
+        dialog.window?.decorView?.post {
+            val currentWidth = dialog.window?.decorView?.width ?: 0
+            if (currentWidth > 0)
+                dialog.window?.setLayout((currentWidth * 2) / 3, WindowManager.LayoutParams.WRAP_CONTENT)
+        }
     }
 
     private fun apply3DMode(format: LeiaFormat) {

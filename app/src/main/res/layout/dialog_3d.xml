@@ -8,43 +8,62 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:orientation="horizontal">
 
-        <RadioGroup
-            android:id="@+id/modeGroup"
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical">
 
-        <RadioButton
-            android:id="@+id/modeFullSbs"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/mode_full_sbs" />
+            <RadioGroup
+                android:id="@+id/modeGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
 
-        <RadioButton
-            android:id="@+id/modeHalfSbs"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/mode_half_sbs" />
+                <RadioButton
+                    android:id="@+id/modeFullSbs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mode_full_sbs" />
 
-        <RadioButton
-            android:id="@+id/modeHalfTab"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/mode_half_tab" />
+                <RadioButton
+                    android:id="@+id/modeHalfSbs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mode_half_sbs" />
 
-        </RadioGroup>
+                <RadioButton
+                    android:id="@+id/modeHalfTab"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mode_half_tab" />
 
-        <Button
-            android:id="@+id/swapEyesBtn"
-            style="@style/Widget.AppCompat.Button.Borderless.Colored"
+            </RadioGroup>
+        </LinearLayout>
+
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
-            android:text="@string/btn_swap_eyes" />
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:paddingTop="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_swap_eyes"
+                android:textAppearance="?android:attr/textAppearanceSmall" />
+
+            <CheckBox
+                android:id="@+id/swapEyesCheck"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                android:text="" />
+        </LinearLayout>
 
     </LinearLayout>
 
