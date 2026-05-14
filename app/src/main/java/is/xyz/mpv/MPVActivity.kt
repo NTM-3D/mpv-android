@@ -2059,10 +2059,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 eventUiHandler.post { leiaEnabled = false; update3DButton() }
             }
             currentLeiaFormat = newFormat
-            // For TAB, disable keepaspect so mpv fills the SurfaceTexture without letterboxing.
-            // Letterboxed TAB creates asymmetric black bars (top in left eye, bottom in right eye)
-            // causing a vertical shift between eyes that breaks 3D fusion.
-            MPVLib.setPropertyString("keepaspect", if (newFormat == LeiaFormat.HALF_TAB) "no" else "yes")
+            applyLeiaDisplayProperties(newFormat, false)
         }
 
         if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART && !leiaEnabled) {
@@ -2074,6 +2071,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     mPrevDesiredBacklightModeState = true
                     leiaEnabled = true
                     Enable3D()
+                    applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
                     update3DButton()
                 }
             }
@@ -2250,20 +2248,32 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
     }
 
+    private fun applyLeiaDisplayProperties(format: LeiaFormat, is3DActive: Boolean) {
+        // For TAB, disable keepaspect so mpv fills the SurfaceTexture without letterboxing.
+        // Letterboxed TAB creates asymmetric black bars (top in left eye, bottom in right eye)
+        // causing a vertical shift between eyes that breaks 3D fusion.
+        MPVLib.setPropertyString("keepaspect", if (format == LeiaFormat.HALF_TAB) "no" else "yes")
+        MPVLib.setPropertyString(
+            "video-aspect-override",
+            if (format == LeiaFormat.FULL_SBS && is3DActive) "16:9" else "no"
+        )
+    }
+
     private fun toggle3D() {
         if (leiaEnabled) {
             leiaEnabled = false
             player.setMode(0)
             Disable3D()
+            applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
         } else {
             // Default to HALF_SBS when no format was auto-detected
             if (currentLeiaFormat == LeiaFormat.NONE) {
                 currentLeiaFormat = LeiaFormat.HALF_SBS
-                MPVLib.setPropertyString("keepaspect", "yes")
             }
             leiaEnabled = true
             player.setMode(leiaFormatToMode(currentLeiaFormat))
             Enable3D()
+            applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
         }
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
@@ -2326,7 +2336,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun apply3DMode(format: LeiaFormat) {
         currentLeiaFormat = format
-        MPVLib.setPropertyString("keepaspect", if (format == LeiaFormat.HALF_TAB) "no" else "yes")
         when (format) {
             LeiaFormat.NONE -> {
                 leiaEnabled = false
@@ -2349,6 +2358,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
         }
+        applyLeiaDisplayProperties(format, leiaEnabled)
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
     }
