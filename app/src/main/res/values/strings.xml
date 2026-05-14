@@ -38,6 +38,11 @@
 
     <!-- Less simple strings -->
     <string name="title_speed_dialog">Playback speed</string>
+    <string name="title_3d_dialog">3D Mode</string>
+    <string name="mode_full_sbs">Full SBS</string>
+    <string name="mode_half_sbs">Half SBS</string>
+    <string name="mode_half_tab">Half TAB</string>
+    <string name="label_subtitle_depth">Subtitle Depth</string>
     <string name="error_no_file">No file given, exiting</string>
     <string name="notice_file_appended">File(s) appended to playlist</string>
     <string name="notice_file_play">Starting playback of file(s)</string>

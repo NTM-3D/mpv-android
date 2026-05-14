@@ -16,7 +16,7 @@ class LeiaTextureRenderer {
     private val textureHolders = mutableListOf<TextureHolder>()
     private var size = Size(640, 480)
     private var textureSize = Size(640, 480)
-    // 0 = 2D passthrough, 1 = half-SBS, 2 = half-TAB
+    // 0 = 2D passthrough, 1 = half-SBS, 2 = half-TAB, 3 = full-SBS
     private var mode = 0
     private var swapImages = false
 
@@ -27,6 +27,52 @@ class LeiaTextureRenderer {
     private var texLocation = -1
     private var modeLocation = -1
     private var swapImagesLocation = -1
+    private var texelSizeYLocation = -1
+    private var eyeSplitYLocation = -1
+
+    // Half-texel size in buffer-coordinate terms (eps) and the y-coordinate of the HTAB
+    // eye split in the raw texture, both derived from the actual buffer and content heights.
+    private var inputTexelSizeY = 0.5f / 1600f
+    private var eyeSplitY = 0.5f
+
+    // Cached heights for recomputing eyeSplitY when videoFraction changes.
+    private var lastBufferHeight = 1600
+    private var lastContentHeight = 1600
+    // Fraction of the coded video frame that is valid display content: displayH / codedH.
+    // For a 1080p H.264 video, codedH=1088 (16-row aligned), displayH=1080, so fraction=0.9926.
+    // eyeSplitY = fraction * contentHeight / (2 * bufferHeight)
+    private var videoFraction = 1.0f
+
+    /**
+     * Set the heights so the shader can find the true HTAB eye split.
+     *
+     * bufferHeight  = rows in the SurfaceTexture buffer (set via setDefaultBufferSize in initialize())
+     * contentHeight = rows mpv actually renders (set via android-surface-size in surfaceChanged)
+     */
+    fun setHeights(bufferHeight: Int, contentHeight: Int) {
+        lastBufferHeight = bufferHeight
+        lastContentHeight = contentHeight
+        recomputeEyeSplit()
+    }
+
+    /**
+     * Inform the renderer of the video's codec-padded vs display dimensions.
+     * H.264 hardware decoders align frame heights to multiples of 16, so a 1080p video
+     * has codedH=1088 but displayH=1080. mpv renders all 1088 rows scaled to the output,
+     * so the true eye split (at display row displayH/2) is at OES y = displayH/(2*codedH),
+     * not 0.5. Pass codedH=0 to reset to no-padding mode (videoFraction=1.0).
+     */
+    fun setVideoCodecDimensions(codedH: Int, displayH: Int) {
+        videoFraction = if (codedH > 0 && displayH > 0) displayH.toFloat() / codedH.toFloat() else 1.0f
+        Log.i(TAG, "setVideoCodecDimensions: codedH=$codedH displayH=$displayH videoFraction=$videoFraction")
+        recomputeEyeSplit()
+    }
+
+    private fun recomputeEyeSplit() {
+        inputTexelSizeY = 0.5f / lastBufferHeight
+        eyeSplitY = videoFraction * lastContentHeight.toFloat() / (2f * lastBufferHeight.toFloat())
+        Log.i(TAG, "recomputeEyeSplit: bufferH=$lastBufferHeight contentH=$lastContentHeight videoFraction=$videoFraction eyeSplitY=$eyeSplitY")
+    }
 
     fun setMode(value: Int) {
         mode = value
@@ -71,6 +117,8 @@ class LeiaTextureRenderer {
         texLocation = glGetUniformLocation(program, "u_Texture")
         modeLocation = glGetUniformLocation(program, "u_Mode")
         swapImagesLocation = glGetUniformLocation(program, "u_SwapImages")
+        texelSizeYLocation = glGetUniformLocation(program, "u_TexelSizeY")
+        eyeSplitYLocation = glGetUniformLocation(program, "u_EyeSplitY")
 
         Log.i(TAG, "swapImagesLocation: $swapImagesLocation")
     }
@@ -121,6 +169,10 @@ class LeiaTextureRenderer {
         logError("bind mode location")
         glUniform1i(swapImagesLocation, (if (swapImages) 1 else 0))
         logError("bind swapImages location")
+        glUniform1f(texelSizeYLocation, inputTexelSizeY)
+        logError("bind texelSizeY location")
+        glUniform1f(eyeSplitYLocation, eyeSplitY)
+        logError("bind eyeSplitY location")
 
         glVertexAttribPointer(
                 posLocation,
@@ -164,6 +216,7 @@ class LeiaTextureRenderer {
     private class TextureHolder(private val texture: SurfaceTexture, val transform: FloatArray) {
         var textureId = -1
         private var stale = true
+
         init {
             texture.setOnFrameAvailableListener { stale = true }
         }
@@ -201,37 +254,69 @@ class LeiaTextureRenderer {
             uniform samplerExternalOES u_Texture;
             uniform int u_Mode;
             uniform int u_SwapImages;
+            // Half-texel size (epsilon) to avoid sampling exactly at the eye boundary.
+            uniform float u_TexelSizeY;
+            // Actual raw-texture y-coordinate of the HTAB eye split, derived from
+            // SurfaceTexture.getTransformMatrix(). Defaults to 0.5.
+            uniform float u_EyeSplitY;
             void main() {
                 vec2 coord = v_TexCoord;
 
-                if (u_Mode == 1) {
-                    // Half-SBS: left half = left eye, right half = right eye
+                if (u_Mode == 0) {
+                    // 2D passthrough: fill both eye halves with the full frame so
+                    // the Leia interlace hardware sees identical content in both eyes.
+                    coord.x = fract(v_TexCoord.x * 2.0);
+                } else if (u_Mode == 1) {
+                    // Half-SBS: left half of input = left eye, right half = right eye.
+                    // No x-remapping needed; mpv lays the content out that way already.
+                    // Swap just mirrors the two halves.
                     if (u_SwapImages == 1) {
                         coord.x = mod(coord.x + 0.5, 1.0);
                     }
                 } else if (u_Mode == 2) {
-                    // Half-TAB: top half = left eye, bottom half = right eye
-                    if (u_SwapImages == 1) {
-                        if (v_TexCoord.x > 0.5) {
-                            coord.x -= 0.5;
-                            coord.x *= 2.0;
-                            coord.y = coord.y * 0.5;
+                    // Half-TAB to SBS: top half of input = left eye, bottom = right eye.
+                    // Use the actual eye split y from the SurfaceTexture transform matrix
+                    // so the mapping is correct even when content height < buffer height.
+                    // Both eyes use the same scale factor (~eyeSplit) so they stay aligned.
+                    float eyeSplit = u_EyeSplitY;
+                    float eps = u_TexelSizeY;
+                    if (u_SwapImages == 0) {
+                        if (v_TexCoord.x < 0.5) {
+                            // left eye: map display [0,1] -> raw y [0, eyeSplit-eps]
+                            coord.x = v_TexCoord.x * 2.0;
+                            coord.y = v_TexCoord.y * (eyeSplit - eps);
                         } else {
-                            coord.x *= 2.0;
-                            coord.y = coord.y * 0.5 + 0.5;
+                            // right eye: map display [0,1] -> raw y [eyeSplit+eps, 2*eyeSplit-eps]
+                            coord.x = (v_TexCoord.x - 0.5) * 2.0;
+                            coord.y = (eyeSplit + eps) + v_TexCoord.y * (eyeSplit - 2.0 * eps);
                         }
                     } else {
-                        if (v_TexCoord.x > 0.5) {
-                            coord.x -= 0.5;
-                            coord.x *= 2.0;
-                            coord.y = coord.y * 0.5 + 0.5;
+                        if (v_TexCoord.x < 0.5) {
+                            coord.x = v_TexCoord.x * 2.0;
+                            coord.y = (eyeSplit + eps) + v_TexCoord.y * (eyeSplit - 2.0 * eps);
                         } else {
-                            coord.x *= 2.0;
-                            coord.y = coord.y * 0.5;
+                            coord.x = (v_TexCoord.x - 0.5) * 2.0;
+                            coord.y = v_TexCoord.y * (eyeSplit - eps);
+                        }
+                    }
+                } else if (u_Mode == 3) {
+                    // Full-SBS: explicit per-eye x remap.
+                    // Each eye samples its own half-frame using eye-local x [0..1].
+                    float eyeX = fract(v_TexCoord.x * 2.0);
+                    if (u_SwapImages == 0) {
+                        if (v_TexCoord.x < 0.5) {
+                            coord.x = eyeX * 0.5;
+                        } else {
+                            coord.x = 0.5 + eyeX * 0.5;
+                        }
+                    } else {
+                        if (v_TexCoord.x < 0.5) {
+                            coord.x = 0.5 + eyeX * 0.5;
+                        } else {
+                            coord.x = eyeX * 0.5;
                         }
                     }
                 }
-                // u_Mode == 0: passthrough, coord unchanged
 
                 gl_FragColor = texture2D(u_Texture, coord);
                 if (gl_FragColor.a < 0.1) {

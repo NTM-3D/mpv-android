@@ -154,6 +154,14 @@
                     app:srcCompat="@drawable/ic_subtitles_black_24dp"
                     app:tint="@color/tint_normal" />
 
+                <Button
+                    android:id="@+id/cycle3DBtn"
+                    style="?buttonBarButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/white"
+                    android:text="3D" />
+
                 <ImageButton
                     android:id="@+id/playBtn"
                     style="?buttonBarButtonStyle"

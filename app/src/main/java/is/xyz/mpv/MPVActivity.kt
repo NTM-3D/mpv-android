@@ -58,13 +58,17 @@ import kotlin.math.roundToInt
 typealias ActivityResultCallback = (Int, Intent?) -> Unit
 typealias StateRestoreCallback = () -> Unit
 
-enum class LeiaFormat { NONE, HALF_SBS, HALF_TAB }
+enum class LeiaFormat { NONE, HALF_SBS, HALF_TAB, FULL_SBS }
 
 fun detectLeiaFormat(filename: String): LeiaFormat {
     val name = filename.lowercase()
+    val isHalfSbs = name.contains("half_2x1") || name.contains("hsbs")
+    val isHalfTab = name.contains("half_1x2") || name.contains("htab")
+    val isFullSbs = name.contains("fsbs") || (name.contains("_2x1") && !name.contains("half_2x1"))
     return when {
-        name.contains("half_2x1") || name.contains("hsbs") -> LeiaFormat.HALF_SBS
-        name.contains("half_1x2") || name.contains("htab") -> LeiaFormat.HALF_TAB
+        isHalfSbs -> LeiaFormat.HALF_SBS
+        isHalfTab -> LeiaFormat.HALF_TAB
+        isFullSbs -> LeiaFormat.FULL_SBS
         else -> LeiaFormat.NONE
     }
 }
@@ -75,6 +79,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private lateinit var sdk: LeiaSDK
     private var leiaEnabled = false
     private var currentLeiaFormat = LeiaFormat.NONE
+    private var subtitleDepth = 0
+    // Codec dimensions for HTAB eye-split correction (H.264 aligns heights to 16 rows).
+    private var videoCodecH = 0
+    private var videoDisplayH = 0
 
     // for calls to eventUi() and eventPropertyUi()
     private val eventUiHandler = Handler(Looper.getMainLooper())
@@ -229,6 +237,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             prevBtn.setOnLongClickListener { openPlaylistMenu(pauseForDialog()); true }
             nextBtn.setOnLongClickListener { openPlaylistMenu(pauseForDialog()); true }
             cycleDecoderBtn.setOnLongClickListener { pickDecoder(); true }
+            cycle3DBtn.setOnClickListener { toggle3D() }
+            cycle3DBtn.setOnLongClickListener { pick3D(); true }
 
             playbackSeekbar.setOnSeekBarChangeListener(seekBarChangeListener)
         }
@@ -1639,7 +1649,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun updateAudioUI() {
         val audioButtons = arrayOf(R.id.prevBtn, R.id.cycleAudioBtn, R.id.playBtn,
                 R.id.cycleSpeedBtn, R.id.nextBtn)
-        val videoButtons = arrayOf(R.id.cycleAudioBtn, R.id.cycleSubsBtn, R.id.playBtn,
+        val videoButtons = arrayOf(R.id.cycleAudioBtn, R.id.cycleSubsBtn, R.id.cycle3DBtn, R.id.playBtn,
                 R.id.cycleDecoderBtn, R.id.cycleSpeedBtn)
 
         val shouldUseAudioUI = isPlayingAudioOnly()
@@ -1911,6 +1921,16 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         when (property) {
             "time-pos" -> updatePlaybackPos(psc.positionSec)
             "playlist-pos", "playlist-count" -> updatePlaylistButtons()
+            "video-params/h" -> {
+                videoCodecH = value.toInt()
+                if (videoCodecH > 0 && videoDisplayH > 0)
+                    player.setVideoCodecDimensions(videoCodecH, videoDisplayH)
+            }
+            "video-params/dh" -> {
+                videoDisplayH = value.toInt()
+                if (videoCodecH > 0 && videoDisplayH > 0)
+                    player.setVideoCodecDimensions(videoCodecH, videoDisplayH)
+            }
         }
     }
 
@@ -2025,15 +2045,24 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
             playbackHasStarted = true
 
+            // Reset codec dimensions; video-params/h and video-params/dh will fire again.
+            videoCodecH = 0
+            videoDisplayH = 0
+            eventUiHandler.post { player.setVideoCodecDimensions(0, 0) }
+
             // Detect 3D format for the new file; disable 3D if previous file had it
             val filename = MPVLib.getPropertyString("filename") ?: ""
             val newFormat = detectLeiaFormat(filename)
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
-                eventUiHandler.post { player.setMode(0); Disable3D(); leiaEnabled = false }
+                eventUiHandler.post { leiaEnabled = false; player.setMode(0); Disable3D(); update3DButton() }
             } else if (leiaEnabled) {
-                eventUiHandler.post { leiaEnabled = false }
+                eventUiHandler.post { leiaEnabled = false; update3DButton() }
             }
             currentLeiaFormat = newFormat
+            // For TAB, disable keepaspect so mpv fills the SurfaceTexture without letterboxing.
+            // Letterboxed TAB creates asymmetric black bars (top in left eye, bottom in right eye)
+            // causing a vertical shift between eyes that breaks 3D fusion.
+            MPVLib.setPropertyString("keepaspect", if (newFormat == LeiaFormat.HALF_TAB) "no" else "yes")
         }
 
         if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART && !leiaEnabled) {
@@ -2041,10 +2070,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // the filename indicates a known 3D format.
             if (currentLeiaFormat != LeiaFormat.NONE) {
                 eventUiHandler.post {
-                    player.setMode(if (currentLeiaFormat == LeiaFormat.HALF_TAB) 2 else 1)
+                    player.setMode(leiaFormatToMode(currentLeiaFormat))
                     mPrevDesiredBacklightModeState = true
-                    Enable3D()
                     leiaEnabled = true
+                    Enable3D()
+                    update3DButton()
                 }
             }
         }
@@ -2201,6 +2231,126 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     fun Disable3D() {
         sdk.enableBacklight(false)
         sdk.enableFaceTracking(false)
+    }
+
+    private fun update3DButton() {
+        val color = if (leiaEnabled)
+            android.graphics.Color.parseColor("#00FF00")
+        else
+            android.graphics.Color.WHITE
+        binding.cycle3DBtn.setTextColor(color)
+    }
+
+    private fun leiaFormatToMode(format: LeiaFormat): Int {
+        return when (format) {
+            LeiaFormat.HALF_SBS -> 1
+            LeiaFormat.HALF_TAB -> 2
+            LeiaFormat.FULL_SBS -> 3
+            LeiaFormat.NONE -> 0
+        }
+    }
+
+    private fun toggle3D() {
+        if (leiaEnabled) {
+            leiaEnabled = false
+            player.setMode(0)
+            Disable3D()
+        } else {
+            // Default to HALF_SBS when no format was auto-detected
+            if (currentLeiaFormat == LeiaFormat.NONE) {
+                currentLeiaFormat = LeiaFormat.HALF_SBS
+                MPVLib.setPropertyString("keepaspect", "yes")
+            }
+            leiaEnabled = true
+            player.setMode(leiaFormatToMode(currentLeiaFormat))
+            Enable3D()
+        }
+        mPrevDesiredBacklightModeState = leiaEnabled
+        update3DButton()
+    }
+
+    private fun pick3D() {
+        val restore = pauseForDialog()
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_3d, null)
+
+        val modeGroup = dialogView.findViewById<android.widget.RadioGroup>(R.id.modeGroup)
+        val modeFullSbs = dialogView.findViewById<android.widget.RadioButton>(R.id.modeFullSbs)
+        val modeHalfSbs = dialogView.findViewById<android.widget.RadioButton>(R.id.modeHalfSbs)
+        val modeHalfTab = dialogView.findViewById<android.widget.RadioButton>(R.id.modeHalfTab)
+        val depthSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.depthSeekBar)
+        val depthValue = dialogView.findViewById<android.widget.TextView>(R.id.depthValue)
+
+        // Set initial radio selection from current format
+        when (currentLeiaFormat) {
+            LeiaFormat.FULL_SBS -> modeFullSbs.isChecked = true
+            LeiaFormat.HALF_SBS -> modeHalfSbs.isChecked = true
+            LeiaFormat.HALF_TAB -> modeHalfTab.isChecked = true
+            else -> modeHalfSbs.isChecked = true
+        }
+
+        // Restore saved depth
+        depthSeekBar.progress = subtitleDepth + 10
+        depthValue.text = if (subtitleDepth >= 0) "+$subtitleDepth" else "$subtitleDepth"
+
+        depthSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val depth = progress - 10
+                depthValue.text = if (depth >= 0) "+$depth" else "$depth"
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
+        lateinit var dialog: AlertDialog
+        dialog = with(AlertDialog.Builder(this)) {
+            setTitle(R.string.title_3d_dialog)
+            setView(dialogView)
+            setPositiveButton(R.string.dialog_ok) { _, _ ->
+                val checkedId = modeGroup.checkedRadioButtonId
+                val newFormat = when (checkedId) {
+                    R.id.modeFullSbs -> LeiaFormat.FULL_SBS
+                    R.id.modeHalfSbs -> LeiaFormat.HALF_SBS
+                    R.id.modeHalfTab -> LeiaFormat.HALF_TAB
+                    else -> LeiaFormat.HALF_SBS
+                }
+                subtitleDepth = depthSeekBar.progress - 10
+                apply3DMode(newFormat)
+                restore()
+            }
+            setNegativeButton(R.string.dialog_cancel) { _, _ -> restore() }
+            setOnCancelListener { restore() }
+            create()
+        }
+        dialog.show()
+    }
+
+    private fun apply3DMode(format: LeiaFormat) {
+        currentLeiaFormat = format
+        MPVLib.setPropertyString("keepaspect", if (format == LeiaFormat.HALF_TAB) "no" else "yes")
+        when (format) {
+            LeiaFormat.NONE -> {
+                leiaEnabled = false
+                player.setMode(0)
+                Disable3D()
+            }
+            LeiaFormat.HALF_SBS -> {
+                leiaEnabled = true
+                player.setMode(1)
+                Enable3D()
+            }
+            LeiaFormat.HALF_TAB -> {
+                leiaEnabled = true
+                player.setMode(2)
+                Enable3D()
+            }
+            LeiaFormat.FULL_SBS -> {
+                leiaEnabled = true
+                player.setMode(3)
+                Enable3D()
+            }
+        }
+        mPrevDesiredBacklightModeState = leiaEnabled
+        update3DButton()
     }
 
     fun checkShouldToggle3D(desired_state: Boolean) {
