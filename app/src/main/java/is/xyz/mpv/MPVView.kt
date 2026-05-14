@@ -21,6 +21,9 @@ import kotlin.reflect.KProperty
 internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(context, attrs), SurfaceHolder.Callback {
     private val mainSurfaceTexture = SurfaceTexture(false)
     private val mainSurface: Surface = Surface(mainSurfaceTexture)
+    // Height of the SurfaceTexture buffer set at initialization. mpv's EGL surface is created
+    // with this size and never resizes, so this is the denominator for eyeSplitY calculations.
+    private var mpvBufferHeight = 1600
 
     private var filePath: String? = null
     private var voInUse: String = "gpu"
@@ -45,8 +48,10 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
         observeProperties()
 
         // Leia: route mpv output through the texture pipeline to InterlacedSurfaceView
-        mainSurfaceTexture.setDefaultBufferSize(2560, 1600)
-        resize(2560, 1600)
+        mpvBufferHeight = 1600
+        mainSurfaceTexture.setDefaultBufferSize(2560, mpvBufferHeight)
+        setHeights(mpvBufferHeight, mpvBufferHeight)
+        resize(2560, mpvBufferHeight)
         val identity = FloatArray(16)
         Matrix.setIdentityM(identity, 0)
         addTexture(mainSurfaceTexture, identity)
@@ -65,6 +70,9 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         MPVLib.setPropertyString("android-surface-size", "${width}x$height")
+        // Keep the buffer at mpvBufferHeight (set in initialize()). mpv's EGL surface was
+        // created at that size and won't resize. setHeights tracks content vs buffer rows.
+        setHeights(mpvBufferHeight, height)
         resize(width, height)
         super.surfaceChanged(holder, format, width, height)
     }
@@ -261,6 +269,8 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
             Property("track-list"),
             Property("video-params/aspect", MPV_FORMAT_DOUBLE),
             Property("video-params/rotate", MPV_FORMAT_DOUBLE),
+            Property("video-params/h", MPV_FORMAT_INT64),
+            Property("video-params/dh", MPV_FORMAT_INT64),
             Property("playlist-pos", MPV_FORMAT_INT64),
             Property("playlist-count", MPV_FORMAT_INT64),
             Property("current-tracks/video/image"),
@@ -271,7 +281,8 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
             Property("shuffle", MPV_FORMAT_FLAG),
             Property("hwdec-current"),
             Property("mute", MPV_FORMAT_FLAG),
-            Property("current-tracks/audio/selected")
+            Property("current-tracks/audio/selected"),
+            Property("sub-text", MPV_FORMAT_STRING)
         )
 
         for ((name, format) in p)

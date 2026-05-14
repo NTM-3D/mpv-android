@@ -1,6 +1,7 @@
 package com.simongellis.leia.webxr
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.GLES20.*
 import android.util.AttributeSet
@@ -45,6 +46,26 @@ open class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSu
 
     fun getMode(): Int {
         return textureRenderer.getMode()
+    }
+
+    fun setHeights(bufferHeight: Int, contentHeight: Int) {
+        textureRenderer.setHeights(bufferHeight, contentHeight)
+    }
+
+    fun setVideoCodecDimensions(codedH: Int, displayH: Int) {
+        textureRenderer.setVideoCodecDimensions(codedH, displayH)
+    }
+
+    fun setStereoSubtitleBitmap(bitmap: Bitmap?) {
+        textureRenderer.setSubtitleBitmap(bitmap)
+    }
+
+    fun setStereoSubtitleEnabled(enabled: Boolean) {
+        textureRenderer.setSubtitleEnabled(enabled)
+    }
+
+    fun setStereoSubtitleDepth(depth: Float) {
+        textureRenderer.setSubtitleDepth(depth)
     }
 
     override fun setRenderer(renderer: Renderer) {

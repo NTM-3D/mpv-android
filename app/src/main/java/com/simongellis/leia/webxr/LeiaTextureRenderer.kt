@@ -1,8 +1,10 @@
 package com.simongellis.leia.webxr
 
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20.*
+import android.opengl.GLUtils
 import android.util.Log
 import android.util.Size
 import java.nio.ByteBuffer
@@ -29,6 +31,15 @@ class LeiaTextureRenderer {
     private var swapImagesLocation = -1
     private var texelSizeYLocation = -1
     private var eyeSplitYLocation = -1
+    private var subtitleTexLocation = -1
+    private var subtitleEnabledLocation = -1
+    private var subtitleDepthLocation = -1
+
+    private var subtitleTextureId = -1
+    @Volatile private var subtitleBitmap: Bitmap? = null
+    @Volatile private var subtitleBitmapDirty = false
+    @Volatile private var subtitleEnabled = false
+    @Volatile private var subtitleDepth = 0f
 
     // Half-texel size in buffer-coordinate terms (eps) and the y-coordinate of the HTAB
     // eye split in the raw texture, both derived from the actual buffer and content heights.
@@ -95,6 +106,19 @@ class LeiaTextureRenderer {
         textureHolders.add(TextureHolder(texture, transform))
     }
 
+    fun setSubtitleBitmap(bitmap: Bitmap?) {
+        subtitleBitmap = bitmap
+        subtitleBitmapDirty = true
+    }
+
+    fun setSubtitleEnabled(enabled: Boolean) {
+        subtitleEnabled = enabled
+    }
+
+    fun setSubtitleDepth(depth: Float) {
+        subtitleDepth = depth
+    }
+
     fun onSurfaceCreated() {
         Log.i(TAG, "onSurfaceCreated")
         val textureIds = IntArray(textureHolders.size)
@@ -119,6 +143,19 @@ class LeiaTextureRenderer {
         swapImagesLocation = glGetUniformLocation(program, "u_SwapImages")
         texelSizeYLocation = glGetUniformLocation(program, "u_TexelSizeY")
         eyeSplitYLocation = glGetUniformLocation(program, "u_EyeSplitY")
+        subtitleTexLocation = glGetUniformLocation(program, "u_SubtitleTexture")
+        subtitleEnabledLocation = glGetUniformLocation(program, "u_SubtitleEnabled")
+        subtitleDepthLocation = glGetUniformLocation(program, "u_SubtitleDepth")
+
+        val ids = IntArray(1)
+        glGenTextures(1, ids, 0)
+        subtitleTextureId = ids[0]
+        glBindTexture(GL_TEXTURE_2D, subtitleTextureId)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glBindTexture(GL_TEXTURE_2D, 0)
 
         Log.i(TAG, "swapImagesLocation: $swapImagesLocation")
     }
@@ -147,6 +184,21 @@ class LeiaTextureRenderer {
     }
 
     private fun renderTexture(holder: TextureHolder) {
+        if (subtitleBitmapDirty) {
+            glBindTexture(GL_TEXTURE_2D, subtitleTextureId)
+            val bmp = subtitleBitmap
+            if (bmp != null && !bmp.isRecycled) {
+                GLUtils.texImage2D(GL_TEXTURE_2D, 0, bmp, 0)
+                glGenerateMipmap(GL_TEXTURE_2D)
+            } else {
+                val clear = ByteBuffer.allocateDirect(4)
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, clear)
+                glGenerateMipmap(GL_TEXTURE_2D)
+            }
+            glBindTexture(GL_TEXTURE_2D, 0)
+            subtitleBitmapDirty = false
+        }
+
         holder.tryUpdateTexImage()
         val textureId = holder.textureId
         val mv = holder.transform
@@ -173,6 +225,13 @@ class LeiaTextureRenderer {
         logError("bind texelSizeY location")
         glUniform1f(eyeSplitYLocation, eyeSplitY)
         logError("bind eyeSplitY location")
+        glUniform1i(subtitleEnabledLocation, if (subtitleEnabled) 1 else 0)
+        glUniform1f(subtitleDepthLocation, subtitleDepth)
+
+        glActiveTexture(GL_TEXTURE1)
+        glBindTexture(GL_TEXTURE_2D, subtitleTextureId)
+        glUniform1i(subtitleTexLocation, 1)
+        glActiveTexture(GL_TEXTURE0)
 
         glVertexAttribPointer(
                 posLocation,
@@ -252,8 +311,11 @@ class LeiaTextureRenderer {
             precision mediump float;
             varying vec2 v_TexCoord;
             uniform samplerExternalOES u_Texture;
+            uniform sampler2D u_SubtitleTexture;
             uniform int u_Mode;
             uniform int u_SwapImages;
+            uniform int u_SubtitleEnabled;
+            uniform float u_SubtitleDepth;
             // Half-texel size (epsilon) to avoid sampling exactly at the eye boundary.
             uniform float u_TexelSizeY;
             // Actual raw-texture y-coordinate of the HTAB eye split, derived from
@@ -319,6 +381,21 @@ class LeiaTextureRenderer {
                 }
 
                 gl_FragColor = texture2D(u_Texture, coord);
+                if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 3)) {
+                    float eyeX = fract(v_TexCoord.x * 2.0);
+                    float depth = u_SubtitleDepth;
+                    vec2 subCoord;
+                    if (v_TexCoord.x < 0.5) {
+                        subCoord = vec2(eyeX + depth, v_TexCoord.y);
+                    } else {
+                        subCoord = vec2(eyeX - depth, v_TexCoord.y);
+                    }
+                    vec4 sub = texture2D(u_SubtitleTexture, subCoord);
+                    gl_FragColor = vec4(
+                        mix(gl_FragColor.rgb, sub.rgb, sub.a),
+                        max(gl_FragColor.a, sub.a)
+                    );
+                }
                 if (gl_FragColor.a < 0.1) {
                     discard;
                 }

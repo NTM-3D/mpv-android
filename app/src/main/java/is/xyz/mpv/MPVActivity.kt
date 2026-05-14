@@ -17,6 +17,10 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.drawable.Icon
 import android.util.Log
 import android.media.AudioManager
@@ -25,6 +29,9 @@ import android.os.*
 import android.preference.PreferenceManager.getDefaultSharedPreferences
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
 import android.util.DisplayMetrics
 import android.util.Rational
 import androidx.core.content.ContextCompat
@@ -80,6 +87,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var leiaEnabled = false
     private var currentLeiaFormat = LeiaFormat.NONE
     private var subtitleDepth = 0
+    private var currentSubText = ""
+    private var stereoSubtitleModeEnabled = false
+    private var subtitleBitmap: Bitmap? = null
     // Codec dimensions for HTAB eye-split correction (H.264 aligns heights to 16 rows).
     private var videoCodecH = 0
     private var videoDisplayH = 0
@@ -298,6 +308,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         // set up initial UI state
         readSettings()
+        applySubtitleDepth(subtitleDepth)
         onConfigurationChanged(resources.configuration)
         run {
             // edge-to-edge & immersive mode
@@ -368,6 +379,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         Log.v(TAG, "Exiting.")
 
         Disable3D()
+        MPVLib.setPropertyBoolean("sub-visibility", true)
+        player.setStereoSubtitleEnabled(false)
+        player.setStereoSubtitleBitmap(null)
+        subtitleBitmap?.recycle()
+        subtitleBitmap = null
 
         // Suppress any further callbacks
         activityIsForeground = false
@@ -534,6 +550,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         this.controlsAtBottom = prefs.getBoolean("bottom_controls", true)
         this.showMediaTitle = prefs.getBoolean("display_media_title", false)
         this.useTimeRemaining = prefs.getBoolean("use_time_remaining", false)
+        this.subtitleDepth = prefs.getInt("subtitle_depth_3d", 0).coerceIn(-10, 10)
         this.ignoreAudioFocus = prefs.getBoolean("ignore_audio_focus", false)
         this.playlistExitWarning = prefs.getBoolean("playlist_exit_warning", true)
         this.newIntentReplace = prefs.getBoolean("new_intent_replace", false)
@@ -1224,7 +1241,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         player.cycleAudio(); TrackData(player.aid, "audio")
     }
     private fun cycleSub() = trackSwitchNotification {
-        player.cycleSub(); TrackData(player.sid, "sub")
+        player.cycleSub()
+        updateStereoSubtitleMode()
+        TrackData(player.sid, "sub")
     }
 
     private fun selectTrack(type: String, get: () -> Int, set: (Int) -> Unit) {
@@ -1257,6 +1276,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 player.secondarySid = it.mpvId
             else
                 player.sid = it.mpvId
+            updateStereoSubtitleMode()
             dialog.dismiss()
             trackSwitchNotification { TrackData(it.mpvId, SubTrackDialog.TRACK_TYPE) }
         }
@@ -1898,8 +1918,14 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun eventPropertyUi(property: String, dummy: Any?, metaUpdated: Boolean) {
         if (!activityIsForeground) return
         when (property) {
-            "track-list" -> player.loadTracks()
-            "current-tracks/audio/selected", "current-tracks/video/image" -> updateAudioUI()
+            "track-list" -> {
+                player.loadTracks()
+                updateStereoSubtitleMode()
+            }
+            "current-tracks/audio/selected", "current-tracks/video/image" -> {
+                updateAudioUI()
+                updateStereoSubtitleMode()
+            }
             "hwdec-current" -> updateDecoderButton()
         }
         if (metaUpdated)
@@ -1949,6 +1975,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         if (!activityIsForeground) return
         when (property) {
             "speed" -> updateSpeedButton()
+            "sub-text" -> updateStereoSubtitleText(value)
         }
         if (metaUpdated)
             updateMetadataDisplay()
@@ -2054,9 +2081,19 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val filename = MPVLib.getPropertyString("filename") ?: ""
             val newFormat = detectLeiaFormat(filename)
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
-                eventUiHandler.post { leiaEnabled = false; player.setMode(0); Disable3D(); update3DButton() }
+                eventUiHandler.post {
+                    leiaEnabled = false
+                    player.setMode(0)
+                    Disable3D()
+                    update3DButton()
+                    updateStereoSubtitleMode()
+                }
             } else if (leiaEnabled) {
-                eventUiHandler.post { leiaEnabled = false; update3DButton() }
+                eventUiHandler.post {
+                    leiaEnabled = false
+                    update3DButton()
+                    updateStereoSubtitleMode()
+                }
             }
             currentLeiaFormat = newFormat
             applyLeiaDisplayProperties(newFormat, false)
@@ -2073,6 +2110,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     Enable3D()
                     applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
                     update3DButton()
+                    updateStereoSubtitleMode()
                 }
             }
         }
@@ -2259,6 +2297,99 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         )
     }
 
+    private fun isSbs3DActive(): Boolean {
+        return leiaEnabled && (currentLeiaFormat == LeiaFormat.HALF_SBS || currentLeiaFormat == LeiaFormat.FULL_SBS)
+    }
+
+    private fun sanitizeSubText(raw: String): String {
+        return raw
+            .replace("\\N", "\n")
+            .replace(Regex("\\{[^}]*\\}"), "")
+            .trim()
+    }
+
+    private fun applySubtitleDepth(depth: Int) {
+        val clamped = depth.coerceIn(-10, 10)
+        val maxStereoOffset = 0.006f
+        val normalizedDepth = (clamped / 10f) * maxStereoOffset
+        // Positive depth = pop out; negative = behind screen.
+        player.setStereoSubtitleDepth(normalizedDepth)
+    }
+
+    private fun createSubtitleBitmap(text: String): Bitmap {
+        val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
+        val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
+        val ss = 2 // supersampling factor for cleaner text
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.DITHER_FLAG).apply {
+            color = Color.WHITE
+            textSize = 24f * resources.displayMetrics.scaledDensity * ss
+            textAlign = Paint.Align.LEFT
+            isLinearText = true
+            setShadowLayer(6f * ss, 0f, 0f, Color.BLACK)
+        }
+        val layout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, textWidth * ss)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setIncludePad(false)
+            .build()
+
+        val textLayer = Bitmap.createBitmap(textWidth * ss, layout.height, Bitmap.Config.ARGB_8888)
+        val textCanvas = Canvas(textLayer)
+        layout.draw(textCanvas)
+
+        // Halve previous bottom distance (96dp -> 48dp).
+        val bottomMargin = (48f * resources.displayMetrics.density).roundToInt()
+        val left = ((width - textWidth) / 2f)
+        val dstHeight = (layout.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
+        val top = (height - bottomMargin - dstHeight).coerceAtLeast(0)
+        val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
+        canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        textLayer.recycle()
+        return bitmap
+    }
+
+    private fun updateStereoSubtitleText(rawText: String) {
+        currentSubText = rawText
+        if (!stereoSubtitleModeEnabled)
+            return
+        val text = sanitizeSubText(rawText)
+        if (text.isBlank()) {
+            subtitleBitmap?.recycle()
+            subtitleBitmap = null
+            player.setStereoSubtitleBitmap(null)
+            return
+        }
+        subtitleBitmap?.recycle()
+        subtitleBitmap = createSubtitleBitmap(text)
+        player.setStereoSubtitleBitmap(subtitleBitmap)
+    }
+
+    private fun persistSubtitleDepth() {
+        getDefaultSharedPreferences(applicationContext).edit()
+            .putInt("subtitle_depth_3d", subtitleDepth)
+            .apply()
+    }
+
+    private fun updateStereoSubtitleMode() {
+        val shouldEnableStereoSubs = isSbs3DActive() && player.sid != -1
+        if (stereoSubtitleModeEnabled != shouldEnableStereoSubs) {
+            stereoSubtitleModeEnabled = shouldEnableStereoSubs
+            MPVLib.setPropertyBoolean("sub-visibility", !shouldEnableStereoSubs)
+        }
+        player.setStereoSubtitleEnabled(shouldEnableStereoSubs)
+        if (!shouldEnableStereoSubs) {
+            subtitleBitmap?.recycle()
+            subtitleBitmap = null
+            player.setStereoSubtitleBitmap(null)
+            return
+        }
+        applySubtitleDepth(subtitleDepth)
+        updateStereoSubtitleText(currentSubText)
+    }
+
     private fun toggle3D() {
         if (leiaEnabled) {
             leiaEnabled = false
@@ -2277,6 +2408,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
+        updateStereoSubtitleMode()
     }
 
     private fun pick3D() {
@@ -2306,6 +2438,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val depth = progress - 10
                 depthValue.text = if (depth >= 0) "+$depth" else "$depth"
+                if (fromUser) {
+                    subtitleDepth = depth
+                    applySubtitleDepth(subtitleDepth)
+                    persistSubtitleDepth()
+                }
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -2324,6 +2461,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     else -> LeiaFormat.HALF_SBS
                 }
                 subtitleDepth = depthSeekBar.progress - 10
+                persistSubtitleDepth()
                 apply3DMode(newFormat)
                 restore()
             }
@@ -2361,6 +2499,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         applyLeiaDisplayProperties(format, leiaEnabled)
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
+        updateStereoSubtitleMode()
     }
 
     fun checkShouldToggle3D(desired_state: Boolean) {
