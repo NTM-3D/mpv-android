@@ -262,6 +262,7 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
         data class Property(val name: String, val format: Int = MPV_FORMAT_NONE)
         val p = arrayOf(
             Property("time-pos", MPV_FORMAT_INT64),
+            Property("time-pos/full", MPV_FORMAT_DOUBLE),
             Property("duration/full", MPV_FORMAT_DOUBLE),
             Property("pause", MPV_FORMAT_FLAG),
             Property("paused-for-cache", MPV_FORMAT_FLAG),
@@ -296,7 +297,13 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
         MPVLib.removeObserver(o)
     }
 
-    data class Track(val mpvId: Int, val name: String, val codec: String? = null)
+    data class Track(
+        val mpvId: Int,
+        val name: String,
+        val codec: String? = null,
+        val ffIndex: Int? = null,
+        val subtitleOrder: Int? = null
+    )
     var tracks = mapOf<String, MutableList<Track>>(
             "audio" to arrayListOf(),
             "video" to arrayListOf(),
@@ -311,6 +318,7 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
         val count = MPVLib.getPropertyInt("track-list/count")!!
         // Note that because events are async, properties might disappear at any moment
         // so use ?: continue instead of !!
+        var subtitleOrder = 0
         for (i in 0 until count) {
             val type = MPVLib.getPropertyString("track-list/$i/type") ?: continue
             if (!tracks.containsKey(type)) {
@@ -321,6 +329,7 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
             val lang = MPVLib.getPropertyString("track-list/$i/lang")
             val title = MPVLib.getPropertyString("track-list/$i/title")
             val codec = MPVLib.getPropertyString("track-list/$i/codec")
+            val ffIndex = MPVLib.getPropertyInt("track-list/$i/ff-index")
 
             val trackName = if (!lang.isNullOrEmpty() && !title.isNullOrEmpty())
                 context.getString(R.string.ui_track_title_lang, mpvId, title, lang)
@@ -328,10 +337,13 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
                 context.getString(R.string.ui_track_text, mpvId, (lang ?: "") + (title ?: ""))
             else
                 context.getString(R.string.ui_track, mpvId)
+            val trackSubtitleOrder = if (type == "sub") subtitleOrder++ else null
             tracks.getValue(type).add(Track(
                     mpvId=mpvId,
                     name=trackName,
-                    codec=codec
+                    codec=codec,
+                    ffIndex=ffIndex,
+                    subtitleOrder=trackSubtitleOrder
             ))
         }
     }

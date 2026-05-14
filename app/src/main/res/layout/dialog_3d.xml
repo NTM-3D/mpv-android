@@ -35,6 +35,12 @@
                     android:text="@string/mode_half_sbs" />
 
                 <RadioButton
+                    android:id="@+id/modeFullTab"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mode_full_tab" />
+
+                <RadioButton
                     android:id="@+id/modeHalfTab"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

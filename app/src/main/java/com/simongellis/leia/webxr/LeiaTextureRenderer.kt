@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20.*
+import android.opengl.Matrix
 import android.opengl.GLUtils
 import android.util.Log
 import android.util.Size
@@ -30,7 +31,9 @@ class LeiaTextureRenderer {
     private var modeLocation = -1
     private var swapImagesLocation = -1
     private var texelSizeYLocation = -1
-    private var eyeSplitYLocation = -1
+    private var activeYMinLocation = -1
+    private var activeYMaxLocation = -1
+    private var videoFractionLocation = -1
     private var subtitleTexLocation = -1
     private var subtitleEnabledLocation = -1
     private var subtitleDepthLocation = -1
@@ -41,21 +44,16 @@ class LeiaTextureRenderer {
     @Volatile private var subtitleEnabled = false
     @Volatile private var subtitleDepth = 0f
 
-    // Half-texel size in buffer-coordinate terms (eps) and the y-coordinate of the HTAB
-    // eye split in the raw texture, both derived from the actual buffer and content heights.
+    // Half-texel size in active-content coordinate terms (eps) for seam-safe TAB split.
     private var inputTexelSizeY = 0.5f / 1600f
-    private var eyeSplitY = 0.5f
 
-    // Cached heights for recomputing eyeSplitY when videoFraction changes.
+    // Cached heights for recomputing TAB sampling epsilon.
     private var lastBufferHeight = 1600
     private var lastContentHeight = 1600
-    // Fraction of the coded video frame that is valid display content: displayH / codedH.
-    // For a 1080p H.264 video, codedH=1088 (16-row aligned), displayH=1080, so fraction=0.9926.
-    // eyeSplitY = fraction * contentHeight / (2 * bufferHeight)
     private var videoFraction = 1.0f
 
     /**
-     * Set the heights so the shader can find the true HTAB eye split.
+     * Set the heights so TAB split epsilon tracks rendered content scale.
      *
      * bufferHeight  = rows in the SurfaceTexture buffer (set via setDefaultBufferSize in initialize())
      * contentHeight = rows mpv actually renders (set via android-surface-size in surfaceChanged)
@@ -63,26 +61,18 @@ class LeiaTextureRenderer {
     fun setHeights(bufferHeight: Int, contentHeight: Int) {
         lastBufferHeight = bufferHeight
         lastContentHeight = contentHeight
-        recomputeEyeSplit()
+        recomputeTabSampling()
     }
 
     /**
-     * Inform the renderer of the video's codec-padded vs display dimensions.
-     * H.264 hardware decoders align frame heights to multiples of 16, so a 1080p video
-     * has codedH=1088 but displayH=1080. mpv renders all 1088 rows scaled to the output,
-     * so the true eye split (at display row displayH/2) is at OES y = displayH/(2*codedH),
-     * not 0.5. Pass codedH=0 to reset to no-padding mode (videoFraction=1.0).
+     * Inform the renderer of codec-padded vs display dimensions for TAB split correction.
      */
     fun setVideoCodecDimensions(codedH: Int, displayH: Int) {
         videoFraction = if (codedH > 0 && displayH > 0) displayH.toFloat() / codedH.toFloat() else 1.0f
-        Log.i(TAG, "setVideoCodecDimensions: codedH=$codedH displayH=$displayH videoFraction=$videoFraction")
-        recomputeEyeSplit()
     }
 
-    private fun recomputeEyeSplit() {
-        inputTexelSizeY = 0.5f / lastBufferHeight
-        eyeSplitY = videoFraction * lastContentHeight.toFloat() / (2f * lastBufferHeight.toFloat())
-        Log.i(TAG, "recomputeEyeSplit: bufferH=$lastBufferHeight contentH=$lastContentHeight videoFraction=$videoFraction eyeSplitY=$eyeSplitY")
+    private fun recomputeTabSampling() {
+        inputTexelSizeY = 0.5f / maxOf(1f, lastContentHeight.toFloat())
     }
 
     fun setMode(value: Int) {
@@ -142,7 +132,9 @@ class LeiaTextureRenderer {
         modeLocation = glGetUniformLocation(program, "u_Mode")
         swapImagesLocation = glGetUniformLocation(program, "u_SwapImages")
         texelSizeYLocation = glGetUniformLocation(program, "u_TexelSizeY")
-        eyeSplitYLocation = glGetUniformLocation(program, "u_EyeSplitY")
+        activeYMinLocation = glGetUniformLocation(program, "u_ActiveYMin")
+        activeYMaxLocation = glGetUniformLocation(program, "u_ActiveYMax")
+        videoFractionLocation = glGetUniformLocation(program, "u_VideoFraction")
         subtitleTexLocation = glGetUniformLocation(program, "u_SubtitleTexture")
         subtitleEnabledLocation = glGetUniformLocation(program, "u_SubtitleEnabled")
         subtitleDepthLocation = glGetUniformLocation(program, "u_SubtitleDepth")
@@ -202,6 +194,7 @@ class LeiaTextureRenderer {
         holder.tryUpdateTexImage()
         val textureId = holder.textureId
         val mv = holder.transform
+        val activeY = computeActiveYRange(holder.texTransform)
 
         glActiveTexture(GL_TEXTURE0)
         logError("glActiveTexture")
@@ -223,8 +216,9 @@ class LeiaTextureRenderer {
         logError("bind swapImages location")
         glUniform1f(texelSizeYLocation, inputTexelSizeY)
         logError("bind texelSizeY location")
-        glUniform1f(eyeSplitYLocation, eyeSplitY)
-        logError("bind eyeSplitY location")
+        glUniform1f(activeYMinLocation, activeY.first)
+        glUniform1f(activeYMaxLocation, activeY.second)
+        glUniform1f(videoFractionLocation, videoFraction)
         glUniform1i(subtitleEnabledLocation, if (subtitleEnabled) 1 else 0)
         glUniform1f(subtitleDepthLocation, subtitleDepth)
 
@@ -272,11 +266,28 @@ class LeiaTextureRenderer {
         }
     }
 
+    private fun mapTransformY(transform: FloatArray, x: Float, y: Float): Float {
+        return transform[1] * x + transform[5] * y + transform[13]
+    }
+
+    private fun computeActiveYRange(transform: FloatArray): Pair<Float, Float> {
+        val y00 = mapTransformY(transform, 0f, 0f)
+        val y01 = mapTransformY(transform, 0f, 1f)
+        val y10 = mapTransformY(transform, 1f, 0f)
+        val y11 = mapTransformY(transform, 1f, 1f)
+        val minY = minOf(y00, y01, y10, y11)
+        val maxY = maxOf(y00, y01, y10, y11)
+        return Pair(minY, maxY)
+    }
+
     private class TextureHolder(private val texture: SurfaceTexture, val transform: FloatArray) {
         var textureId = -1
+        val texTransform = FloatArray(16)
         private var stale = true
 
         init {
+            Matrix.setIdentityM(texTransform, 0)
+            texture.getTransformMatrix(texTransform)
             texture.setOnFrameAvailableListener { stale = true }
         }
 
@@ -289,6 +300,7 @@ class LeiaTextureRenderer {
             if (stale) {
                 stale = false
                 texture.updateTexImage()
+                texture.getTransformMatrix(texTransform)
             }
         }
     }
@@ -318,9 +330,9 @@ class LeiaTextureRenderer {
             uniform float u_SubtitleDepth;
             // Half-texel size (epsilon) to avoid sampling exactly at the eye boundary.
             uniform float u_TexelSizeY;
-            // Actual raw-texture y-coordinate of the HTAB eye split, derived from
-            // SurfaceTexture.getTransformMatrix(). Defaults to 0.5.
-            uniform float u_EyeSplitY;
+            uniform float u_ActiveYMin;
+            uniform float u_ActiveYMax;
+            uniform float u_VideoFraction;
             void main() {
                 vec2 coord = v_TexCoord;
 
@@ -336,29 +348,27 @@ class LeiaTextureRenderer {
                         coord.x = mod(coord.x + 0.5, 1.0);
                     }
                 } else if (u_Mode == 2) {
-                    // Half-TAB to SBS: top half of input = left eye, bottom = right eye.
-                    // Use the actual eye split y from the SurfaceTexture transform matrix
-                    // so the mapping is correct even when content height < buffer height.
-                    // Both eyes use the same scale factor (~eyeSplit) so they stay aligned.
-                    float eyeSplit = u_EyeSplitY;
-                    float eps = u_TexelSizeY;
+                    // Half-TAB to SBS using transform-derived active Y window and
+                    // codec/display correction for padded heights.
+                    float span = max(u_ActiveYMax - u_ActiveYMin, 0.00001);
+                    float eyeSpan = max(span * 0.5 * u_VideoFraction, 0.00001);
+                    float split = u_ActiveYMin + eyeSpan;
+                    float eps = min(u_TexelSizeY * span, eyeSpan * 0.25);
                     if (u_SwapImages == 0) {
                         if (v_TexCoord.x < 0.5) {
-                            // left eye: map display [0,1] -> raw y [0, eyeSplit-eps]
                             coord.x = v_TexCoord.x * 2.0;
-                            coord.y = v_TexCoord.y * (eyeSplit - eps);
+                            coord.y = u_ActiveYMin + v_TexCoord.y * max(eyeSpan - eps, 0.00001);
                         } else {
-                            // right eye: map display [0,1] -> raw y [eyeSplit+eps, 2*eyeSplit-eps]
                             coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = (eyeSplit + eps) + v_TexCoord.y * (eyeSplit - 2.0 * eps);
+                            coord.y = (split + eps) + v_TexCoord.y * max(eyeSpan - 2.0 * eps, 0.00001);
                         }
                     } else {
                         if (v_TexCoord.x < 0.5) {
                             coord.x = v_TexCoord.x * 2.0;
-                            coord.y = (eyeSplit + eps) + v_TexCoord.y * (eyeSplit - 2.0 * eps);
+                            coord.y = (split + eps) + v_TexCoord.y * max(eyeSpan - 2.0 * eps, 0.00001);
                         } else {
                             coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = v_TexCoord.y * (eyeSplit - eps);
+                            coord.y = u_ActiveYMin + v_TexCoord.y * max(eyeSpan - eps, 0.00001);
                         }
                     }
                 } else if (u_Mode == 3) {

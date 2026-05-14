@@ -15,7 +15,6 @@ extern "C" {
 
 extern "C" {
     jni_func(jobject, grabThumbnail, jint dimension);
-    jni_func(jobject, grabSubtitleBitmap, jint width, jint height);
 };
 
 static inline mpv_node make_node_str(const char *s)
@@ -130,90 +129,5 @@ jni_func(jobject, grabThumbnail, jint dimension) {
     env->DeleteLocalRef(arr);
     env->DeleteLocalRef(bitmap_config);
 
-    return bitmap;
-}
-
-jni_func(jobject, grabSubtitleBitmap, jint out_width, jint out_height) {
-    CHECK_MPV_INIT();
-    if (out_width <= 0 || out_height <= 0)
-        return NULL;
-
-    mpv_node result{};
-    {
-        mpv_node c{}, c_args[2];
-        mpv_node_list c_array{};
-        c_args[0] = make_node_str("screenshot-raw");
-        c_args[1] = make_node_str("subtitles");
-        c_array.num = 2;
-        c_array.values = c_args;
-        c.format = MPV_FORMAT_NODE_ARRAY;
-        c.u.list = &c_array;
-        if (mpv_command_node(g_mpv, &c, &result) < 0) {
-            ALOGE("screenshot-raw subtitles command failed");
-            return NULL;
-        }
-    }
-
-    int w = 0, h = 0, stride = 0;
-    bool format_ok = false;
-    struct mpv_byte_array *data = NULL;
-    do {
-        if (result.format != MPV_FORMAT_NODE_MAP)
-            break;
-        for (int i = 0; i < result.u.list->num; i++) {
-            std::string key(result.u.list->keys[i]);
-            const mpv_node *val = &result.u.list->values[i];
-            if (key == "w" || key == "h" || key == "stride") {
-                if (val->format != MPV_FORMAT_INT64)
-                    break;
-                if (key == "w")
-                    w = val->u.int64;
-                else if (key == "h")
-                    h = val->u.int64;
-                else
-                    stride = val->u.int64;
-            } else if (key == "format") {
-                if (val->format != MPV_FORMAT_STRING)
-                    break;
-                format_ok = !strcmp(val->u.string, "bgr0");
-            } else if (key == "data") {
-                if (val->format != MPV_FORMAT_BYTE_ARRAY)
-                    break;
-                data = val->u.ba;
-            }
-        }
-    } while (0);
-    if (!w || !h || !stride || !format_ok || !data) {
-        mpv_free_node_contents(&result);
-        return NULL;
-    }
-
-    struct SwsContext *ctx = sws_getContext(
-        w, h, AV_PIX_FMT_BGR0,
-        out_width, out_height, AV_PIX_FMT_RGB32,
-        SWS_BICUBIC, NULL, NULL, NULL);
-    if (!ctx) {
-        mpv_free_node_contents(&result);
-        return NULL;
-    }
-
-    jintArray arr = env->NewIntArray(out_width * out_height);
-    jint *scaled = env->GetIntArrayElements(arr, NULL);
-
-    uint8_t *src_p[4] = { reinterpret_cast<uint8_t*>(data->data) }, *dst_p[4] = { (uint8_t*) scaled };
-    int src_stride[4] = { stride },
-        dst_stride[4] = { (int) sizeof(jint) * out_width };
-    sws_scale(ctx, src_p, src_stride, 0, h, dst_p, dst_stride);
-    sws_freeContext(ctx);
-    mpv_free_node_contents(&result);
-
-    env->ReleaseIntArrayElements(arr, scaled, 0);
-    jobject bitmap_config =
-        env->GetStaticObjectField(android_graphics_Bitmap_Config, android_graphics_Bitmap_Config_ARGB_8888);
-    jobject bitmap =
-        env->CallStaticObjectMethod(android_graphics_Bitmap, android_graphics_Bitmap_createBitmap,
-        arr, out_width, out_height, bitmap_config);
-    env->DeleteLocalRef(arr);
-    env->DeleteLocalRef(bitmap_config);
     return bitmap;
 }

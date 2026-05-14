@@ -26,7 +26,9 @@ object MPVLib {
     external fun setOptionString(name: String, value: String): Int
 
     external fun grabThumbnail(dimension: Int): Bitmap?
-    external fun grabSubtitleBitmap(width: Int, height: Int): Bitmap?
+    external fun initImageSubtitleDecoder(path: String, ffIndex: Int, subtitleOrder: Int, codecHint: String?): Boolean
+    external fun releaseImageSubtitleDecoder()
+    external fun renderImageSubtitleAt(timePosSec: Double, width: Int, height: Int): Bitmap?
 
     external fun getPropertyInt(property: String): Int?
     external fun setPropertyInt(property: String, value: Int)

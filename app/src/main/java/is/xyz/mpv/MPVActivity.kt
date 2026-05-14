@@ -66,17 +66,37 @@ import kotlin.math.roundToInt
 typealias ActivityResultCallback = (Int, Intent?) -> Unit
 typealias StateRestoreCallback = () -> Unit
 
-enum class LeiaFormat { NONE, HALF_SBS, HALF_TAB, FULL_SBS }
+enum class LeiaFormat { NONE, HALF_SBS, HALF_TAB, FULL_SBS, FULL_TAB }
 
 fun detectLeiaFormat(filename: String): LeiaFormat {
     val name = filename.lowercase()
-    val isHalfSbs = name.contains("half_2x1") || name.contains("hsbs")
-    val isHalfTab = name.contains("half_1x2") || name.contains("htab")
-    val isFullSbs = name.contains("fsbs") || (name.contains("_2x1") && !name.contains("half_2x1"))
+    val tokenBoundary = "[\\s._\\-\\[\\]\\(\\)]"
+    fun hasToken(token: String): Boolean {
+        val pattern = "(^|$tokenBoundary)${Regex.escape(token)}($tokenBoundary|$)"
+        return Regex(pattern).containsMatchIn(name)
+    }
+    fun hasAnyToken(tokens: Array<String>): Boolean = tokens.any { hasToken(it) }
+
+    val halfSbsExplicit = hasAnyToken(arrayOf("hsbs", "half-sbs", "half_sbs", "sbs-half", "sbs_half", "half_2x1"))
+    val halfTabExplicit = hasAnyToken(arrayOf("htab", "half-tab", "half_tab", "tab-half", "tab_half", "half_1x2"))
+    val fullSbsExplicit = hasAnyToken(arrayOf("fsbs", "full-sbs", "full_sbs", "sbs-full", "sbs_full", "full_2x1"))
+    val fullTabExplicit = hasAnyToken(arrayOf("ftab", "full-tab", "full_tab", "tab-full", "tab_full", "full_1x2", "full-ou", "full_ou", "full-overunder"))
+
+    val genericSbs = hasToken("sbs")
+    val genericTabOrOu = hasAnyToken(arrayOf("tab", "ou", "overunder", "over-under", "over_under", "topbottom", "top-bottom", "top_bottom", "tb"))
+
+    val has2x1Fallback = name.contains("_2x1") && !name.contains("half_2x1")
+    val has1x2Fallback = name.contains("_1x2") && !name.contains("half_1x2")
+
     return when {
-        isHalfSbs -> LeiaFormat.HALF_SBS
-        isHalfTab -> LeiaFormat.HALF_TAB
-        isFullSbs -> LeiaFormat.FULL_SBS
+        halfSbsExplicit -> LeiaFormat.HALF_SBS
+        halfTabExplicit -> LeiaFormat.HALF_TAB
+        fullSbsExplicit -> LeiaFormat.FULL_SBS
+        fullTabExplicit -> LeiaFormat.FULL_TAB
+        genericSbs -> LeiaFormat.HALF_SBS
+        genericTabOrOu -> LeiaFormat.HALF_TAB
+        has2x1Fallback -> LeiaFormat.FULL_SBS
+        has1x2Fallback -> LeiaFormat.FULL_TAB
         else -> LeiaFormat.NONE
     }
 }
@@ -91,6 +111,17 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
     private var subtitleBitmap: Bitmap? = null
+    private var imageSubtitleDecoderReady = false
+    private var imageSubtitleDecoderPath: String? = null
+    private var imageSubtitleDecoderFfIndex: Int? = null
+    private var imageSubtitleDecoderRequestKey: String? = null
+    private var imageSubtitleDecoderFailedKey: String? = null
+    private var userForced3DOffForCurrentFile = false
+    private var imageSubtitleDecoderGeneration = 0
+    private var imageSubtitleInitThread: HandlerThread? = null
+    private var imageSubtitleInitHandler: Handler? = null
+    private enum class ImageSubtitleDecoderState { IDLE, INITIALIZING, READY, FAILED }
+    private var imageSubtitleDecoderState = ImageSubtitleDecoderState.IDLE
     // Codec dimensions for HTAB eye-split correction (H.264 aligns heights to 16 rows).
     private var videoCodecH = 0
     private var videoDisplayH = 0
@@ -380,6 +411,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     override fun onDestroy() {
         Log.v(TAG, "Exiting.")
 
+        stopImageSubtitleDecoder(resetNative = true, shutdownThread = true)
         Disable3D()
         MPVLib.setPropertyBoolean("sub-visibility", true)
         player.setStereoSubtitleEnabled(false)
@@ -1965,6 +1997,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun eventPropertyUi(property: String, value: Double) {
         if (!activityIsForeground) return
         when (property) {
+            "time-pos/full" -> onTimePositionChanged(value)
             "duration/full" -> updatePlaybackDuration(psc.durationSec)
             "video-params/aspect", "video-params/rotate" -> {
                 updateOrientation()
@@ -2082,6 +2115,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // Detect 3D format for the new file; disable 3D if previous file had it
             val filename = MPVLib.getPropertyString("filename") ?: ""
             val newFormat = detectLeiaFormat(filename)
+            userForced3DOffForCurrentFile = false
+            imageSubtitleDecoderFailedKey = null
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
                 eventUiHandler.post {
                     leiaEnabled = false
@@ -2104,7 +2139,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART && !leiaEnabled) {
             // Enable 3D only once mpv is actively rendering frames, and only when
             // the filename indicates a known 3D format.
-            if (currentLeiaFormat != LeiaFormat.NONE) {
+            if (currentLeiaFormat != LeiaFormat.NONE && !userForced3DOffForCurrentFile) {
                 eventUiHandler.post {
                     player.setMode(leiaFormatToMode(currentLeiaFormat))
                     mPrevDesiredBacklightModeState = true
@@ -2284,18 +2319,16 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             LeiaFormat.HALF_SBS -> 1
             LeiaFormat.HALF_TAB -> 2
             LeiaFormat.FULL_SBS -> 3
+            LeiaFormat.FULL_TAB -> 2
             LeiaFormat.NONE -> 0
         }
     }
 
     private fun applyLeiaDisplayProperties(format: LeiaFormat, is3DActive: Boolean) {
-        // For TAB, disable keepaspect so mpv fills the SurfaceTexture without letterboxing.
-        // Letterboxed TAB creates asymmetric black bars (top in left eye, bottom in right eye)
-        // causing a vertical shift between eyes that breaks 3D fusion.
-        MPVLib.setPropertyString("keepaspect", if (format == LeiaFormat.HALF_TAB) "no" else "yes")
+        MPVLib.setPropertyString("keepaspect", "yes")
         MPVLib.setPropertyString(
             "video-aspect-override",
-            if (format == LeiaFormat.FULL_SBS && is3DActive) "16:9" else "no"
+            if ((format == LeiaFormat.FULL_SBS || format == LeiaFormat.FULL_TAB) && is3DActive) "16:9" else "no"
         )
     }
 
@@ -2378,6 +2411,121 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                codec.contains("xsub")
     }
 
+    private fun getSelectedSubtitleTrack(): MPVView.Track? {
+        if (player.sid == -1)
+            return null
+        return player.tracks["sub"]?.firstOrNull { it.mpvId == player.sid }
+    }
+
+    private fun ensureImageSubtitleInitThread() {
+        if (imageSubtitleInitThread?.isAlive == true && imageSubtitleInitHandler != null)
+            return
+        imageSubtitleInitThread = HandlerThread("image_subtitle_init").apply { start() }
+        imageSubtitleInitHandler = Handler(imageSubtitleInitThread!!.looper)
+    }
+
+    private fun decoderPathCandidates(): List<String> {
+        val candidates = linkedSetOf<String>()
+        val path = MPVLib.getPropertyString("path")
+        val filename = MPVLib.getPropertyString("filename")
+        if (!path.isNullOrBlank()) {
+            candidates.add(path)
+            if (path.startsWith("file://")) {
+                candidates.add(path.removePrefix("file://"))
+            }
+        }
+        if (!filename.isNullOrBlank()) {
+            candidates.add(filename)
+            if (filename.startsWith("file://")) {
+                candidates.add(filename.removePrefix("file://"))
+            }
+        }
+        return candidates.toList()
+    }
+
+    private fun startImageSubtitleDecoderInit(
+        pathCandidates: List<String>,
+        ffIndex: Int,
+        subtitleOrder: Int,
+        codecHint: String?
+    ) {
+        ensureImageSubtitleInitThread()
+        imageSubtitleDecoderGeneration += 1
+        val generation = imageSubtitleDecoderGeneration
+        val requestKey = "${pathCandidates.joinToString("|")}#$ffIndex#$subtitleOrder#${codecHint ?: ""}"
+        imageSubtitleDecoderState = ImageSubtitleDecoderState.INITIALIZING
+        imageSubtitleDecoderReady = false
+        imageSubtitleDecoderPath = null
+        imageSubtitleDecoderFfIndex = ffIndex
+        imageSubtitleDecoderRequestKey = requestKey
+        imageSubtitleInitHandler?.post {
+            var ok = false
+            var selectedPath: String? = null
+            for (candidate in pathCandidates) {
+                if (MPVLib.initImageSubtitleDecoder(candidate, ffIndex, subtitleOrder, codecHint)) {
+                    ok = true
+                    selectedPath = candidate
+                    break
+                }
+            }
+            eventUiHandler.post {
+                if (generation != imageSubtitleDecoderGeneration || !stereoSubtitleModeEnabled || !isImageSubtitleTrackSelected()) {
+                    if (ok)
+                        MPVLib.releaseImageSubtitleDecoder()
+                    return@post
+                }
+                imageSubtitleDecoderReady = ok
+                imageSubtitleDecoderState = if (ok) ImageSubtitleDecoderState.READY else ImageSubtitleDecoderState.FAILED
+                if (ok) {
+                    imageSubtitleDecoderPath = selectedPath
+                    imageSubtitleDecoderFailedKey = null
+                    player.setStereoSubtitleDepth(0f)
+                    updateImageSubtitleFrame(player.timePos ?: 0.0)
+                } else {
+                    imageSubtitleDecoderFailedKey = requestKey
+                    subtitleBitmap?.recycle()
+                    subtitleBitmap = null
+                    player.setStereoSubtitleBitmap(null)
+                }
+            }
+        }
+    }
+
+    private fun stopImageSubtitleDecoder(resetNative: Boolean, shutdownThread: Boolean = false) {
+        imageSubtitleDecoderGeneration += 1
+        imageSubtitleDecoderReady = false
+        imageSubtitleDecoderState = ImageSubtitleDecoderState.IDLE
+        imageSubtitleDecoderPath = null
+        imageSubtitleDecoderFfIndex = null
+        imageSubtitleDecoderRequestKey = null
+        subtitleBitmap?.recycle()
+        subtitleBitmap = null
+        player.setStereoSubtitleBitmap(null)
+        if (shutdownThread) {
+            if (resetNative) {
+                MPVLib.releaseImageSubtitleDecoder()
+            }
+            imageSubtitleInitHandler?.removeCallbacksAndMessages(null)
+            imageSubtitleInitThread?.quitSafely()
+            imageSubtitleInitThread = null
+            imageSubtitleInitHandler = null
+        } else if (resetNative) {
+            imageSubtitleInitHandler?.post { MPVLib.releaseImageSubtitleDecoder() } ?: MPVLib.releaseImageSubtitleDecoder()
+        }
+    }
+
+    private fun updateImageSubtitleFrame(timePosSec: Double) {
+        if (!stereoSubtitleModeEnabled || !isImageSubtitleTrackSelected() ||
+            !imageSubtitleDecoderReady || imageSubtitleDecoderState != ImageSubtitleDecoderState.READY)
+            return
+        val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
+        val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
+        val bmp = MPVLib.renderImageSubtitleAt(timePosSec, width, height) ?: return
+        subtitleBitmap?.recycle()
+        subtitleBitmap = bmp
+        player.setStereoSubtitleBitmap(subtitleBitmap)
+    }
+
     private fun persistSubtitleDepth() {
         getDefaultSharedPreferences(applicationContext).edit()
             .putInt("subtitle_depth_3d", subtitleDepth)
@@ -2388,31 +2536,65 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val shouldEnableStereoSubs = isSbs3DActive() && player.sid != -1
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
         val imageTrack = shouldEnableStereoSubs && isImageSubtitleTrackSelected()
-        MPVLib.setPropertyBoolean("sub-visibility", imageTrack || !shouldEnableStereoSubs)
-        player.setStereoSubtitleEnabled(shouldEnableStereoSubs && !imageTrack)
+        MPVLib.setPropertyBoolean("sub-visibility", !shouldEnableStereoSubs)
+        player.setStereoSubtitleEnabled(shouldEnableStereoSubs)
         if (!shouldEnableStereoSubs) {
-            subtitleBitmap?.recycle()
-            subtitleBitmap = null
-            player.setStereoSubtitleBitmap(null)
+            stopImageSubtitleDecoder(resetNative = true)
             return
         }
         if (imageTrack) {
-            subtitleBitmap?.recycle()
-            subtitleBitmap = null
-            player.setStereoSubtitleBitmap(null)
+            val selectedTrack = getSelectedSubtitleTrack()
+            val ffIndex = selectedTrack?.ffIndex
+            val subtitleOrder = selectedTrack?.subtitleOrder
+            val codecHint = selectedTrack?.codec
+            val candidates = decoderPathCandidates()
+            if (ffIndex == null || subtitleOrder == null || candidates.isEmpty()) {
+                stopImageSubtitleDecoder(resetNative = true)
+                MPVLib.setPropertyBoolean("sub-visibility", true)
+                player.setStereoSubtitleEnabled(false)
+                return
+            }
+            val requestKey = "${candidates.joinToString("|")}#$ffIndex#$subtitleOrder#${codecHint ?: ""}"
+            val needInit = !imageSubtitleDecoderReady ||
+                !candidates.contains(imageSubtitleDecoderPath) ||
+                imageSubtitleDecoderFfIndex != ffIndex
+            if (needInit && imageSubtitleDecoderState != ImageSubtitleDecoderState.INITIALIZING) {
+                if (imageSubtitleDecoderState == ImageSubtitleDecoderState.FAILED &&
+                    imageSubtitleDecoderFailedKey == requestKey) {
+                    persistSubtitleDepth()
+                    return
+                }
+                stopImageSubtitleDecoder(resetNative = true)
+                startImageSubtitleDecoderInit(candidates, ffIndex, subtitleOrder, codecHint)
+            }
+            player.setStereoSubtitleDepth(0f)
+            if (imageSubtitleDecoderState == ImageSubtitleDecoderState.READY) {
+                updateImageSubtitleFrame(player.timePos ?: 0.0)
+            }
+            persistSubtitleDepth()
             return
         }
+        stopImageSubtitleDecoder(resetNative = true)
         applySubtitleDepth(subtitleDepth)
         updateStereoSubtitleText(currentSubText)
     }
 
+    private fun onTimePositionChanged(timePosSec: Double) {
+        if (stereoSubtitleModeEnabled && isImageSubtitleTrackSelected() && imageSubtitleDecoderReady) {
+            updateImageSubtitleFrame(timePosSec)
+        }
+    }
+
     private fun toggle3D() {
         if (leiaEnabled) {
+            userForced3DOffForCurrentFile = true
             leiaEnabled = false
             player.setMode(0)
             Disable3D()
             applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
         } else {
+            userForced3DOffForCurrentFile = false
+            imageSubtitleDecoderFailedKey = null
             // Default to HALF_SBS when no format was auto-detected
             if (currentLeiaFormat == LeiaFormat.NONE) {
                 currentLeiaFormat = LeiaFormat.HALF_SBS
@@ -2435,6 +2617,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val modeFullSbs = dialogView.findViewById<android.widget.RadioButton>(R.id.modeFullSbs)
         val modeHalfSbs = dialogView.findViewById<android.widget.RadioButton>(R.id.modeHalfSbs)
         val modeHalfTab = dialogView.findViewById<android.widget.RadioButton>(R.id.modeHalfTab)
+        val modeFullTab = dialogView.findViewById<android.widget.RadioButton>(R.id.modeFullTab)
         val swapEyesCheck = dialogView.findViewById<CheckBox>(R.id.swapEyesCheck)
         val depthSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.depthSeekBar)
         val depthValue = dialogView.findViewById<android.widget.TextView>(R.id.depthValue)
@@ -2444,6 +2627,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             LeiaFormat.FULL_SBS -> modeFullSbs.isChecked = true
             LeiaFormat.HALF_SBS -> modeHalfSbs.isChecked = true
             LeiaFormat.HALF_TAB -> modeHalfTab.isChecked = true
+            LeiaFormat.FULL_TAB -> modeFullTab.isChecked = true
             else -> modeHalfSbs.isChecked = true
         }
 
@@ -2479,6 +2663,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     R.id.modeFullSbs -> LeiaFormat.FULL_SBS
                     R.id.modeHalfSbs -> LeiaFormat.HALF_SBS
                     R.id.modeHalfTab -> LeiaFormat.HALF_TAB
+                    R.id.modeFullTab -> LeiaFormat.FULL_TAB
                     else -> LeiaFormat.HALF_SBS
                 }
                 subtitleDepth = depthSeekBar.progress - 10
@@ -2502,23 +2687,37 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         currentLeiaFormat = format
         when (format) {
             LeiaFormat.NONE -> {
+                userForced3DOffForCurrentFile = true
                 leiaEnabled = false
                 player.setMode(0)
                 Disable3D()
             }
             LeiaFormat.HALF_SBS -> {
+                userForced3DOffForCurrentFile = false
+                imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
                 player.setMode(1)
                 Enable3D()
             }
             LeiaFormat.HALF_TAB -> {
+                userForced3DOffForCurrentFile = false
+                imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
                 player.setMode(2)
                 Enable3D()
             }
             LeiaFormat.FULL_SBS -> {
+                userForced3DOffForCurrentFile = false
+                imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
                 player.setMode(3)
+                Enable3D()
+            }
+            LeiaFormat.FULL_TAB -> {
+                userForced3DOffForCurrentFile = false
+                imageSubtitleDecoderFailedKey = null
+                leiaEnabled = true
+                player.setMode(2)
                 Enable3D()
             }
         }

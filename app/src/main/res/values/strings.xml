@@ -42,6 +42,7 @@
     <string name="mode_full_sbs">Full SBS</string>
     <string name="mode_half_sbs">Half SBS</string>
     <string name="mode_half_tab">Half TAB</string>
+    <string name="mode_full_tab">Full TAB</string>
     <string name="label_swap_eyes">Swap eyes</string>
     <string name="label_subtitle_depth">Subtitle depth</string>
     <string name="error_no_file">No file given, exiting</string>
