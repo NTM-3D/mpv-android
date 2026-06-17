@@ -2133,7 +2133,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 }
             }
             currentLeiaFormat = newFormat
-            applyLeiaDisplayProperties(newFormat, false)
         }
 
         if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART && !leiaEnabled) {
@@ -2141,11 +2140,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // the filename indicates a known 3D format.
             if (currentLeiaFormat != LeiaFormat.NONE && !userForced3DOffForCurrentFile) {
                 eventUiHandler.post {
-                    player.setMode(leiaFormatToMode(currentLeiaFormat))
-                    mPrevDesiredBacklightModeState = true
-                    leiaEnabled = true
-                    Enable3D()
-                    applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+                    apply3DMode(currentLeiaFormat)
                     update3DButton()
                     updateStereoSubtitleMode()
                 }
@@ -2314,16 +2309,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         binding.cycle3DBtn.setTextColor(color)
     }
 
-    private fun leiaFormatToMode(format: LeiaFormat): Int {
-        return when (format) {
-            LeiaFormat.HALF_SBS -> 1
-            LeiaFormat.HALF_TAB -> 2
-            LeiaFormat.FULL_SBS -> 3
-            LeiaFormat.FULL_TAB -> 2
-            LeiaFormat.NONE -> 0
-        }
-    }
-
     private fun applyLeiaDisplayProperties(format: LeiaFormat, is3DActive: Boolean) {
         MPVLib.setPropertyString("keepaspect", "yes")
         MPVLib.setPropertyString(
@@ -2333,7 +2318,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     }
 
     private fun isSbs3DActive(): Boolean {
-        return leiaEnabled && (currentLeiaFormat == LeiaFormat.HALF_SBS || currentLeiaFormat == LeiaFormat.FULL_SBS)
+        return leiaEnabled
     }
 
     private fun sanitizeSubText(raw: String): String {
@@ -2591,7 +2576,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             leiaEnabled = false
             player.setMode(0)
             Disable3D()
-            applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
         } else {
             userForced3DOffForCurrentFile = false
             imageSubtitleDecoderFailedKey = null
@@ -2599,10 +2583,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             if (currentLeiaFormat == LeiaFormat.NONE) {
                 currentLeiaFormat = LeiaFormat.HALF_SBS
             }
-            leiaEnabled = true
-            player.setMode(leiaFormatToMode(currentLeiaFormat))
-            Enable3D()
-            applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+            apply3DMode(currentLeiaFormat)
         }
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
@@ -2717,6 +2698,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
+                // For now, use mode 2 (TAB conversion) for FULL_TAB as well
                 player.setMode(2)
                 Enable3D()
             }

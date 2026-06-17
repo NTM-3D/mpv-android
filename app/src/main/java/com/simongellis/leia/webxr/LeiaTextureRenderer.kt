@@ -19,6 +19,7 @@ class LeiaTextureRenderer {
     private val textureHolders = mutableListOf<TextureHolder>()
     private var size = Size(640, 480)
     private var textureSize = Size(640, 480)
+    // Mode mapping:
     // 0 = 2D passthrough, 1 = half-SBS, 2 = half-TAB, 3 = full-SBS
     private var mode = 0
     private var swapImages = false
@@ -352,26 +353,25 @@ class LeiaTextureRenderer {
                     float span = max(activeYMax - activeYMin, 0.00001);
                     float halfSpan = span * 0.5;
                     float sourceSpan = max(halfSpan * u_VideoFraction, 0.00001);
-                    float inset = max((halfSpan - sourceSpan) * 0.5, 0.0);
-                    float topStart = activeYMin + inset;
-                    float bottomStart = activeYMin + halfSpan + inset;
                     float eps = min(u_TexelSizeY * span, sourceSpan * 0.25);
                     float sampleSpan = max(sourceSpan - 2.0 * eps, 0.00001);
+                    // Eye boundary at midpoint, no inset offset
+                    float midpoint = activeYMin + halfSpan;
                     if (u_SwapImages == 0) {
                         if (v_TexCoord.x < 0.5) {
                             coord.x = v_TexCoord.x * 2.0;
-                            coord.y = (topStart + eps) + v_TexCoord.y * sampleSpan;
+                            coord.y = (activeYMin + eps) + v_TexCoord.y * sampleSpan;
                         } else {
                             coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = (bottomStart + eps) + v_TexCoord.y * sampleSpan;
+                            coord.y = (midpoint + eps) + v_TexCoord.y * sampleSpan;
                         }
                     } else {
                         if (v_TexCoord.x < 0.5) {
                             coord.x = v_TexCoord.x * 2.0;
-                            coord.y = (bottomStart + eps) + v_TexCoord.y * sampleSpan;
+                            coord.y = (midpoint + eps) + v_TexCoord.y * sampleSpan;
                         } else {
                             coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = (topStart + eps) + v_TexCoord.y * sampleSpan;
+                            coord.y = (activeYMin + eps) + v_TexCoord.y * sampleSpan;
                         }
                     }
                 } else if (u_Mode == 3) {
