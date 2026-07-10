@@ -22,7 +22,7 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
     private val mainSurfaceTexture = SurfaceTexture(false)
     private val mainSurface: Surface = Surface(mainSurfaceTexture)
     // Height of the SurfaceTexture buffer set at initialization. mpv's EGL surface is created
-    // with this size and never resizes, so this is the denominator for eyeSplitY calculations.
+    // with this size and never resizes.
     private var mpvBufferHeight = 1600
 
     private var filePath: String? = null
@@ -50,7 +50,6 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
         // Leia: route mpv output through the texture pipeline to InterlacedSurfaceView
         mpvBufferHeight = 1600
         mainSurfaceTexture.setDefaultBufferSize(2560, mpvBufferHeight)
-        setHeights(mpvBufferHeight, mpvBufferHeight)
         resize(2560, mpvBufferHeight)
         val identity = FloatArray(16)
         Matrix.setIdentityM(identity, 0)
@@ -70,9 +69,6 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
         MPVLib.setPropertyString("android-surface-size", "${width}x$height")
-        // Keep the buffer at mpvBufferHeight (set in initialize()). mpv's EGL surface was
-        // created at that size and won't resize. setHeights tracks content vs buffer rows.
-        setHeights(mpvBufferHeight, height)
         resize(width, height)
         super.surfaceChanged(holder, format, width, height)
     }
@@ -178,6 +174,15 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
 
         MPVLib.setOptionString("gpu-context", "android")
         MPVLib.setOptionString("opengl-es", "yes")
+        // Force mpv out of its "dumb mode" fast-path renderer. In dumb mode,
+        // mpv skips refreshing its internal texture-size bookkeeping every
+        // frame, which is the only place the crop/padding correction for
+        // hardware-decoded (MediaCodec) frames gets applied. Our minimal
+        // config (no color management/scaler filters) otherwise causes mpv
+        // to auto-select dumb mode, silently dropping that crop correction
+        // and causing hwdec'd TAB video to bleed a few padding rows from one
+        // eye into the other.
+        MPVLib.setOptionString("gpu-dumb-mode", "no")
         MPVLib.setOptionString("hwdec", hwdec)
         MPVLib.setOptionString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1")
         MPVLib.setOptionString("ao", "audiotrack,opensles")
@@ -270,8 +275,6 @@ internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(
             Property("track-list"),
             Property("video-params/aspect", MPV_FORMAT_DOUBLE),
             Property("video-params/rotate", MPV_FORMAT_DOUBLE),
-            Property("video-params/h", MPV_FORMAT_INT64),
-            Property("video-params/dh", MPV_FORMAT_INT64),
             Property("playlist-pos", MPV_FORMAT_INT64),
             Property("playlist-count", MPV_FORMAT_INT64),
             Property("current-tracks/video/image"),

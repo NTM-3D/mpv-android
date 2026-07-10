@@ -88,6 +88,9 @@ fun detectLeiaFormat(filename: String): LeiaFormat {
     val has2x1Fallback = name.contains("_2x1") && !name.contains("half_2x1")
     val has1x2Fallback = name.contains("_1x2") && !name.contains("half_1x2")
 
+    // Camera-generated filenames like SV_20260709_175214.mp4 are always Full SBS.
+    val svTimestamped = Regex("^sv_\\d{8}(_|\\.|$)").containsMatchIn(name)
+
     return when {
         halfSbsExplicit -> LeiaFormat.HALF_SBS
         halfTabExplicit -> LeiaFormat.HALF_TAB
@@ -97,6 +100,7 @@ fun detectLeiaFormat(filename: String): LeiaFormat {
         genericTabOrOu -> LeiaFormat.HALF_TAB
         has2x1Fallback -> LeiaFormat.FULL_SBS
         has1x2Fallback -> LeiaFormat.FULL_TAB
+        svTimestamped -> LeiaFormat.FULL_SBS
         else -> LeiaFormat.NONE
     }
 }
@@ -122,9 +126,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var imageSubtitleInitHandler: Handler? = null
     private enum class ImageSubtitleDecoderState { IDLE, INITIALIZING, READY, FAILED }
     private var imageSubtitleDecoderState = ImageSubtitleDecoderState.IDLE
-    // Codec dimensions for HTAB eye-split correction (H.264 aligns heights to 16 rows).
-    private var videoCodecH = 0
-    private var videoDisplayH = 0
 
     // for calls to eventUi() and eventPropertyUi()
     private val eventUiHandler = Handler(Looper.getMainLooper())
@@ -1981,16 +1982,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         when (property) {
             "time-pos" -> updatePlaybackPos(psc.positionSec)
             "playlist-pos", "playlist-count" -> updatePlaylistButtons()
-            "video-params/h" -> {
-                videoCodecH = value.toInt()
-                if (videoCodecH > 0 && videoDisplayH > 0)
-                    player.setVideoCodecDimensions(videoCodecH, videoDisplayH)
-            }
-            "video-params/dh" -> {
-                videoDisplayH = value.toInt()
-                if (videoCodecH > 0 && videoDisplayH > 0)
-                    player.setVideoCodecDimensions(videoCodecH, videoDisplayH)
-            }
         }
     }
 
@@ -2106,11 +2097,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
 
             playbackHasStarted = true
-
-            // Reset codec dimensions; video-params/h and video-params/dh will fire again.
-            videoCodecH = 0
-            videoDisplayH = 0
-            eventUiHandler.post { player.setVideoCodecDimensions(0, 0) }
 
             // Detect 3D format for the new file; disable 3D if previous file had it
             val filename = MPVLib.getPropertyString("filename") ?: ""
@@ -2310,11 +2296,14 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     }
 
     private fun applyLeiaDisplayProperties(format: LeiaFormat, is3DActive: Boolean) {
-        MPVLib.setPropertyString("keepaspect", "yes")
-        MPVLib.setPropertyString(
-            "video-aspect-override",
-            if ((format == LeiaFormat.FULL_SBS || format == LeiaFormat.FULL_TAB) && is3DActive) "16:9" else "no"
-        )
+        // Stereo composite frames (SBS/TAB) must fill the mpv render buffer edge-to-edge,
+        // with no internal aspect-driven letterboxing, so the eye split always lands at
+        // the exact halfway point regardless of the buffer's own aspect ratio. The real
+        // 16:9-in-16:10 letterboxing for the final image is applied once, after eye
+        // splitting, in LeiaTextureRenderer.
+        val stereoActive = is3DActive && format != LeiaFormat.NONE
+        MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
+        MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
     private fun isSbs3DActive(): Boolean {
@@ -2343,13 +2332,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val canvas = Canvas(bitmap)
 
         val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
-        val ss = 1
+        val ss = 4  // Supersampling: 4x quality for sharper text
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.DITHER_FLAG).apply {
             color = Color.WHITE
-            textSize = 36f * resources.displayMetrics.scaledDensity * ss
+            textSize = 28f * resources.displayMetrics.scaledDensity * ss
             textAlign = Paint.Align.LEFT
             isLinearText = true
-            setShadowLayer(6f, 0f, 0f, Color.BLACK)
+            setShadowLayer(6f * ss, 0f, 0f, Color.BLACK)
         }
         val layout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, textWidth * ss)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
@@ -2360,11 +2349,15 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val textCanvas = Canvas(textLayer)
         layout.draw(textCanvas)
 
-        // Move to 65% of current distance (48dp baseline -> 31.2dp).
-        val bottomMargin = (48f * 0.65f * resources.displayMetrics.density).roundToInt()
+        // Calculate single-line baseline position
+        val bottomMargin = (72f * 0.65f * resources.displayMetrics.density).roundToInt()
+        val singleLineHeight = (textPaint.textSize / ss).roundToInt()
+        val singleLineBaseline = height - bottomMargin - singleLineHeight
+        
+        // Center multi-line text around single-line baseline
         val left = ((width - textWidth) / 2f)
         val dstHeight = (layout.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
-        val top = (height - bottomMargin - dstHeight).coerceAtLeast(0)
+        val top = (singleLineBaseline - dstHeight / 2 + singleLineHeight / 2).coerceAtLeast(0)
         val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
         canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         textLayer.recycle()
@@ -2615,6 +2608,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // Restore saved depth
         depthSeekBar.progress = subtitleDepth + 10
         depthValue.text = if (subtitleDepth >= 0) "+$subtitleDepth" else "$subtitleDepth"
+
         swapEyesCheck.isChecked = player.getSwapImages()
         swapEyesCheck.setOnCheckedChangeListener { _, isChecked ->
             player.setSwapImages(isChecked)
@@ -2666,6 +2660,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun apply3DMode(format: LeiaFormat) {
         currentLeiaFormat = format
+        Log.d("HALF_TAB_DEBUG", "apply3DMode called: format=$format")
         when (format) {
             LeiaFormat.NONE -> {
                 userForced3DOffForCurrentFile = true
@@ -2685,6 +2680,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
                 player.setMode(2)
+                Log.d("HALF_TAB_DEBUG", "HALF_TAB mode activated, setting mode=2")
                 Enable3D()
             }
             LeiaFormat.FULL_SBS -> {
@@ -2700,6 +2696,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 leiaEnabled = true
                 // For now, use mode 2 (TAB conversion) for FULL_TAB as well
                 player.setMode(2)
+                Log.d("HALF_TAB_DEBUG", "FULL_TAB mode activated, setting mode=2")
                 Enable3D()
             }
         }

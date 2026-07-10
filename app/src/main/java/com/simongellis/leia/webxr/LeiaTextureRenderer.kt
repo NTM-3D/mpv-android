@@ -31,10 +31,6 @@ class LeiaTextureRenderer {
     private var texLocation = -1
     private var modeLocation = -1
     private var swapImagesLocation = -1
-    private var texelSizeYLocation = -1
-    private var activeYMinLocation = -1
-    private var activeYMaxLocation = -1
-    private var videoFractionLocation = -1
     private var subtitleTexLocation = -1
     private var subtitleEnabledLocation = -1
     private var subtitleDepthLocation = -1
@@ -45,36 +41,13 @@ class LeiaTextureRenderer {
     @Volatile private var subtitleEnabled = false
     @Volatile private var subtitleDepth = 0f
 
-    // Half-texel size in active-content coordinate terms (eps) for seam-safe TAB split.
-    private var inputTexelSizeY = 0.5f / 1600f
+    // The known aspect ratio of a single eye's content (mpv is configured with
+    // keepaspect=no for stereo modes, so this is the only place aspect ratio is
+    // enforced). All source material for this app is 16:9 per eye.
+    private val contentAspect = 16f / 9f
 
-    // Cached heights for recomputing TAB sampling epsilon.
-    private var lastBufferHeight = 1600
-    private var lastContentHeight = 1600
-    private var videoFraction = 1.0f
-
-    /**
-     * Set the heights so TAB split epsilon tracks rendered content scale.
-     *
-     * bufferHeight  = rows in the SurfaceTexture buffer (set via setDefaultBufferSize in initialize())
-     * contentHeight = rows mpv actually renders (set via android-surface-size in surfaceChanged)
-     */
-    fun setHeights(bufferHeight: Int, contentHeight: Int) {
-        lastBufferHeight = bufferHeight
-        lastContentHeight = contentHeight
-        recomputeTabSampling()
-    }
-
-    /**
-     * Inform the renderer of codec-padded vs display dimensions for TAB split correction.
-     */
-    fun setVideoCodecDimensions(codedH: Int, displayH: Int) {
-        videoFraction = if (codedH > 0 && displayH > 0) displayH.toFloat() / codedH.toFloat() else 1.0f
-    }
-
-    private fun recomputeTabSampling() {
-        inputTexelSizeY = 0.5f / maxOf(1f, lastContentHeight.toFloat())
-    }
+    private val letterboxMatrix = FloatArray(16)
+    private val drawMv = FloatArray(16)
 
     fun setMode(value: Int) {
         mode = value
@@ -132,10 +105,6 @@ class LeiaTextureRenderer {
         texLocation = glGetUniformLocation(program, "u_Texture")
         modeLocation = glGetUniformLocation(program, "u_Mode")
         swapImagesLocation = glGetUniformLocation(program, "u_SwapImages")
-        texelSizeYLocation = glGetUniformLocation(program, "u_TexelSizeY")
-        activeYMinLocation = glGetUniformLocation(program, "u_ActiveYMin")
-        activeYMaxLocation = glGetUniformLocation(program, "u_ActiveYMax")
-        videoFractionLocation = glGetUniformLocation(program, "u_VideoFraction")
         subtitleTexLocation = glGetUniformLocation(program, "u_SubtitleTexture")
         subtitleEnabledLocation = glGetUniformLocation(program, "u_SubtitleEnabled")
         subtitleDepthLocation = glGetUniformLocation(program, "u_SubtitleDepth")
@@ -162,6 +131,10 @@ class LeiaTextureRenderer {
         //Log.i(TAG, "onDrawFrame")
         glViewport(0, 0, size.width, size.height)
         logError("glViewport")
+        // Clear to black first: the letterbox bars added below to preserve the
+        // true 16:9 content aspect on this 16:10 screen are not otherwise painted.
+        glClearColor(0f, 0f, 0f, 1f)
+        glClear(GL_COLOR_BUFFER_BIT)
         glUseProgram(program)
         logError("glUseProgram")
         for (holder in textureHolders) {
@@ -174,6 +147,27 @@ class LeiaTextureRenderer {
         glShaderSource(shader, source)
         glCompileShader(shader)
         return shader
+    }
+
+    /**
+     * Build a scale matrix that shrinks the full-screen quad so its displayed
+     * aspect ratio matches contentAspect, leaving black bars (via glClear above)
+     * on whichever axis the screen's own aspect ratio doesn't match.
+     */
+    private fun computeLetterboxMatrix(): FloatArray {
+        val screenAspect = size.width.toFloat() / size.height.toFloat()
+        var scaleX = 1f
+        var scaleY = 1f
+        if (screenAspect > contentAspect) {
+            // Screen is relatively wider than the content: pillarbox (shrink X).
+            scaleX = contentAspect / screenAspect
+        } else if (screenAspect < contentAspect) {
+            // Screen is relatively taller than the content: letterbox (shrink Y).
+            scaleY = screenAspect / contentAspect
+        }
+        Matrix.setIdentityM(letterboxMatrix, 0)
+        Matrix.scaleM(letterboxMatrix, 0, scaleX, scaleY, 1f)
+        return letterboxMatrix
     }
 
     private fun renderTexture(holder: TextureHolder) {
@@ -194,8 +188,7 @@ class LeiaTextureRenderer {
 
         holder.tryUpdateTexImage()
         val textureId = holder.textureId
-        val mv = holder.transform
-        val activeY = computeActiveYRange(holder.texTransform)
+        Matrix.multiplyMM(drawMv, 0, holder.transform, 0, computeLetterboxMatrix(), 0)
 
         glActiveTexture(GL_TEXTURE0)
         logError("glActiveTexture")
@@ -205,21 +198,21 @@ class LeiaTextureRenderer {
         // Set texture parameters to clamp to border and specify black border color
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        // GL_TEXTURE_EXTERNAL_OES textures cannot mipmap; the GLES default MIN_FILTER
+        // (NEAREST_MIPMAP_LINEAR) is invalid for them and its behavior is driver-defined
+        // if left unset. Explicitly use GL_LINEAR for both filters.
+        glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
 
         glUniform1i(texLocation, 0)
         logError("bind tex location")
-        glUniformMatrix4fv(mvLocation, 1, false, mv, 0)
+        glUniformMatrix4fv(mvLocation, 1, false, drawMv, 0)
         logError("bind mv location")
         glUniform1i(modeLocation, mode)
         logError("bind mode location")
         glUniform1i(swapImagesLocation, (if (swapImages) 1 else 0))
         logError("bind swapImages location")
-        glUniform1f(texelSizeYLocation, inputTexelSizeY)
-        logError("bind texelSizeY location")
-        glUniform1f(activeYMinLocation, activeY.first)
-        glUniform1f(activeYMaxLocation, activeY.second)
-        glUniform1f(videoFractionLocation, videoFraction)
         glUniform1i(subtitleEnabledLocation, if (subtitleEnabled) 1 else 0)
         glUniform1f(subtitleDepthLocation, subtitleDepth)
 
@@ -267,26 +260,11 @@ class LeiaTextureRenderer {
         }
     }
 
-    private fun mapTransformY(transform: FloatArray, x: Float, y: Float): Float {
-        return transform[1] * x + transform[5] * y + transform[13]
-    }
-
-    private fun computeActiveYRange(transform: FloatArray): Pair<Float, Float> {
-        val y00 = mapTransformY(transform, 0f, 0f)
-        val y01 = mapTransformY(transform, 0f, 1f)
-        val y10 = mapTransformY(transform, 1f, 0f)
-        val y11 = mapTransformY(transform, 1f, 1f)
-        return Pair(minOf(y00, y01, y10, y11), maxOf(y00, y01, y10, y11))
-    }
-
     private class TextureHolder(private val texture: SurfaceTexture, val transform: FloatArray) {
         var textureId = -1
-        val texTransform = FloatArray(16)
         private var stale = true
 
         init {
-            Matrix.setIdentityM(texTransform, 0)
-            texture.getTransformMatrix(texTransform)
             texture.setOnFrameAvailableListener { stale = true }
         }
 
@@ -299,7 +277,6 @@ class LeiaTextureRenderer {
             if (stale) {
                 stale = false
                 texture.updateTexImage()
-                texture.getTransformMatrix(texTransform)
             }
         }
     }
@@ -327,11 +304,6 @@ class LeiaTextureRenderer {
             uniform int u_SwapImages;
             uniform int u_SubtitleEnabled;
             uniform float u_SubtitleDepth;
-            // Half-texel size (epsilon) to avoid sampling exactly at the eye boundary.
-            uniform float u_TexelSizeY;
-            uniform float u_ActiveYMin;
-            uniform float u_ActiveYMax;
-            uniform float u_VideoFraction;
             void main() {
                 vec2 coord = v_TexCoord;
 
@@ -347,31 +319,25 @@ class LeiaTextureRenderer {
                         coord.x = mod(coord.x + 0.5, 1.0);
                     }
                 } else if (u_Mode == 2) {
-                    // Half-TAB to SBS in flipped display space (same space as visible output).
-                    float activeYMin = 1.0 - u_ActiveYMax;
-                    float activeYMax = 1.0 - u_ActiveYMin;
-                    float span = max(activeYMax - activeYMin, 0.00001);
-                    float halfSpan = span * 0.5;
-                    float sourceSpan = max(halfSpan * u_VideoFraction, 0.00001);
-                    float eps = min(u_TexelSizeY * span, sourceSpan * 0.25);
-                    float sampleSpan = max(sourceSpan - 2.0 * eps, 0.00001);
-                    // Eye boundary at midpoint, no inset offset
-                    float midpoint = activeYMin + halfSpan;
+                    // Half-TAB: top half of texture = left eye, bottom half = right eye.
+                    // mpv is configured with keepaspect=no for stereo modes, so the
+                    // composite frame fills the buffer edge-to-edge and the eye
+                    // boundary always lands exactly at the halfway point.
                     if (u_SwapImages == 0) {
                         if (v_TexCoord.x < 0.5) {
                             coord.x = v_TexCoord.x * 2.0;
-                            coord.y = (activeYMin + eps) + v_TexCoord.y * sampleSpan;
+                            coord.y = v_TexCoord.y * 0.5;
                         } else {
                             coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = (midpoint + eps) + v_TexCoord.y * sampleSpan;
+                            coord.y = 0.5 + v_TexCoord.y * 0.5;
                         }
                     } else {
                         if (v_TexCoord.x < 0.5) {
                             coord.x = v_TexCoord.x * 2.0;
-                            coord.y = (midpoint + eps) + v_TexCoord.y * sampleSpan;
+                            coord.y = 0.5 + v_TexCoord.y * 0.5;
                         } else {
                             coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = (activeYMin + eps) + v_TexCoord.y * sampleSpan;
+                            coord.y = v_TexCoord.y * 0.5;
                         }
                     }
                 } else if (u_Mode == 3) {
@@ -394,7 +360,9 @@ class LeiaTextureRenderer {
                 }
 
                 gl_FragColor = texture2D(u_Texture, coord);
-                if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 3)) {
+                // Subtitles work for all SBS-output modes (1=HALF_SBS, 2=HALF_TAB, 3=FULL_SBS)
+                // Mode 2 outputs SBS after TAB transformation
+                if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 2 || u_Mode == 3)) {
                     float eyeX = fract(v_TexCoord.x * 2.0);
                     float depth = u_SubtitleDepth;
                     vec2 subCoord;

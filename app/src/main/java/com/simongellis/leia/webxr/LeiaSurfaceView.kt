@@ -48,14 +48,6 @@ open class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSu
         return textureRenderer.getMode()
     }
 
-    fun setHeights(bufferHeight: Int, contentHeight: Int) {
-        textureRenderer.setHeights(bufferHeight, contentHeight)
-    }
-
-    fun setVideoCodecDimensions(codedH: Int, displayH: Int) {
-        textureRenderer.setVideoCodecDimensions(codedH, displayH)
-    }
-
     fun setStereoSubtitleBitmap(bitmap: Bitmap?) {
         textureRenderer.setSubtitleBitmap(bitmap)
     }

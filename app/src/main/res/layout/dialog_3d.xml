@@ -103,10 +103,10 @@
             android:progress="10" />
 
         <TextView
-            android:id="@+id/depthValue"
             android:layout_width="40dp"
             android:layout_height="wrap_content"
             android:gravity="end"
+            android:id="@+id/depthValue"
             android:text="0"
             android:textAppearance="?android:attr/textAppearanceSmall" />
 
