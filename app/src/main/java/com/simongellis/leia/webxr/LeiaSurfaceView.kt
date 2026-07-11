@@ -60,6 +60,10 @@ open class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSu
         textureRenderer.setSubtitleDepth(depth)
     }
 
+    fun setContentAspect(aspect: Float) {
+        textureRenderer.setContentAspect(aspect)
+    }
+
     fun setStereoSubtitlePosition(position: Float) {
         textureRenderer.setSubtitlePosition(position)
     }

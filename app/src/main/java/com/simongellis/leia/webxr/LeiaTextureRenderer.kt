@@ -47,8 +47,8 @@ class LeiaTextureRenderer {
 
     // The known aspect ratio of a single eye's content (mpv is configured with
     // keepaspect=no for stereo modes, so this is the only place aspect ratio is
-    // enforced). All source material for this app is 16:9 per eye.
-    private val contentAspect = 16f / 9f
+    // enforced). Updated dynamically when the video changes or the stereo mode changes.
+    private var contentAspect = 16f / 9f
 
     private val letterboxMatrix = FloatArray(16)
     private val drawMv = FloatArray(16)
@@ -67,6 +67,10 @@ class LeiaTextureRenderer {
 
     fun getSwapImages(): Boolean {
         return swapImages
+    }
+
+    fun setContentAspect(aspect: Float) {
+        if (aspect > 0f) contentAspect = aspect
     }
 
     fun addTexture(texture: SurfaceTexture, transform: FloatArray) {

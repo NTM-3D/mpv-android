@@ -1999,6 +1999,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             "video-params/aspect", "video-params/rotate" -> {
                 updateOrientation()
                 updatePiPParams()
+                updateContentAspect()
             }
         }
     }
@@ -2305,11 +2306,34 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // Stereo composite frames (SBS/TAB) must fill the mpv render buffer edge-to-edge,
         // with no internal aspect-driven letterboxing, so the eye split always lands at
         // the exact halfway point regardless of the buffer's own aspect ratio. The real
-        // 16:9-in-16:10 letterboxing for the final image is applied once, after eye
+        // per-eye letterboxing for the final image is applied once, after eye
         // splitting, in LeiaTextureRenderer.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
         MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
         MPVLib.setPropertyString("video-aspect-override", "no")
+        updateContentAspect(format, is3DActive)
+    }
+
+    /**
+     * Compute the true per-eye aspect ratio from the raw video aspect and the
+     * current stereo format, then push it to the renderer.
+     *
+     * For SBS formats the composite frame is twice as wide as one eye, so the
+     * per-eye aspect is half the composite aspect.
+     * For TAB formats the composite frame is twice as tall as one eye, so the
+     * per-eye aspect is twice the composite aspect.
+     * In 2D mode just pass the raw aspect through (mpv handles letterboxing itself).
+     */
+    private fun updateContentAspect(format: LeiaFormat = currentLeiaFormat, is3DActive: Boolean = leiaEnabled) {
+        val rawAspect = player.getVideoAspect()?.toFloat() ?: return
+        if (rawAspect <= 0f) return
+        val perEyeAspect: Float = when {
+            !is3DActive || format == LeiaFormat.NONE -> rawAspect
+            format == LeiaFormat.HALF_SBS || format == LeiaFormat.FULL_SBS -> rawAspect / 2f
+            format == LeiaFormat.HALF_TAB || format == LeiaFormat.FULL_TAB -> rawAspect * 2f
+            else -> rawAspect
+        }
+        player.setContentAspect(perEyeAspect)
     }
 
     private fun isSbs3DActive(): Boolean {
