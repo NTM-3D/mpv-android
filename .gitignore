@@ -10,3 +10,6 @@ obj
 build/
 local.properties
 *~
+# Android signing keys
+*.keystore
+*.jks
