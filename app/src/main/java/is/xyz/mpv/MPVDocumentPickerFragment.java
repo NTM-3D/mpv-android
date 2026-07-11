@@ -1,4 +1,4 @@
-package is.xyz.mpv;
+package is.xyz.mpv.ntm3d;
 
 import android.net.Uri;
 import android.view.View;

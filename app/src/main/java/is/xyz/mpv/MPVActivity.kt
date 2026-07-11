@@ -1,7 +1,7 @@
-package `is`.xyz.mpv
+package `is`.xyz.mpv.ntm3d
 
-import `is`.xyz.mpv.databinding.PlayerBinding
-import `is`.xyz.mpv.MPVLib.MpvEvent
+import `is`.xyz.mpv.ntm3d.databinding.PlayerBinding
+import `is`.xyz.mpv.ntm3d.MPVLib.MpvEvent
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint
@@ -2262,7 +2262,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         private const val RCODE_EXTERNAL_SUB = 1001
         private const val RCODE_LOAD_FILE = 1002
         // action of result intent
-        private const val RESULT_INTENT = "is.xyz.mpv.MPVActivity.result"
+        private const val RESULT_INTENT = "is.xyz.mpv.ntm3d.MPVActivity.result"
         // stream type used with AudioManager
         private const val STREAM_TYPE = AudioManager.STREAM_MUSIC
         // precision used by seekbar (1/s)

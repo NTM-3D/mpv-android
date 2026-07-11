@@ -1,6 +1,6 @@
-package `is`.xyz.mpv
+package `is`.xyz.mpv.ntm3d
 
-import `is`.xyz.mpv.databinding.DialogTrackBinding
+import `is`.xyz.mpv.ntm3d.databinding.DialogTrackBinding
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup

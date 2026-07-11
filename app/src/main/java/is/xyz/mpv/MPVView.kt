@@ -1,4 +1,4 @@
-package `is`.xyz.mpv
+package `is`.xyz.mpv.ntm3d
 
 import android.content.Context
 import android.graphics.SurfaceTexture
@@ -11,11 +11,11 @@ import android.util.Log
 import android.view.*
 import androidx.core.content.ContextCompat
 import com.simongellis.leia.webxr.LeiaSurfaceView
-import `is`.xyz.mpv.MPVLib.MpvFormat.MPV_FORMAT_DOUBLE
-import `is`.xyz.mpv.MPVLib.MpvFormat.MPV_FORMAT_FLAG
-import `is`.xyz.mpv.MPVLib.MpvFormat.MPV_FORMAT_INT64
-import `is`.xyz.mpv.MPVLib.MpvFormat.MPV_FORMAT_NONE
-import `is`.xyz.mpv.MPVLib.MpvFormat.MPV_FORMAT_STRING
+import `is`.xyz.mpv.ntm3d.MPVLib.MpvFormat.MPV_FORMAT_DOUBLE
+import `is`.xyz.mpv.ntm3d.MPVLib.MpvFormat.MPV_FORMAT_FLAG
+import `is`.xyz.mpv.ntm3d.MPVLib.MpvFormat.MPV_FORMAT_INT64
+import `is`.xyz.mpv.ntm3d.MPVLib.MpvFormat.MPV_FORMAT_NONE
+import `is`.xyz.mpv.ntm3d.MPVLib.MpvFormat.MPV_FORMAT_STRING
 import kotlin.reflect.KProperty
 
 internal class MPVView(context: Context, attrs: AttributeSet) : LeiaSurfaceView(context, attrs), SurfaceHolder.Callback {

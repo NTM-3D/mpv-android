@@ -1,6 +1,6 @@
-package `is`.xyz.mpv
+package `is`.xyz.mpv.ntm3d
 
-import `is`.xyz.mpv.databinding.DialogSliderBinding
+import `is`.xyz.mpv.ntm3d.databinding.DialogSliderBinding
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.SeekBar

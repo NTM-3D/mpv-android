@@ -1,4 +1,4 @@
-package `is`.xyz.mpv
+package `is`.xyz.mpv.ntm3d
 
 import android.content.Context
 import android.util.AttributeSet

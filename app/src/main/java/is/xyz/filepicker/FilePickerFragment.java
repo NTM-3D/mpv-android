@@ -6,7 +6,7 @@
 
 package is.xyz.filepicker;
 
-import is.xyz.mpv.R;
+import is.xyz.mpv.ntm3d.R;
 
 import android.Manifest;
 import android.content.Context;

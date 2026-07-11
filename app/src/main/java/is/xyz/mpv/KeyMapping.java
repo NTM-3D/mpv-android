@@ -1,4 +1,4 @@
-package is.xyz.mpv;
+package is.xyz.mpv.ntm3d;
 
 // Mapping between Android and mpv keycodes (special keys)
 

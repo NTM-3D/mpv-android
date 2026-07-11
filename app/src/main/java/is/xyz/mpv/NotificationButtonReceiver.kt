@@ -1,4 +1,4 @@
-package `is`.xyz.mpv
+package `is`.xyz.mpv.ntm3d
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -29,6 +29,6 @@ class NotificationButtonReceiver : BroadcastReceiver() {
         }
 
         private const val TAG = "mpv"
-        private const val PREFIX = "is.xyz.mpv"
+        private const val PREFIX = "is.xyz.mpv.ntm3d"
     }
 }

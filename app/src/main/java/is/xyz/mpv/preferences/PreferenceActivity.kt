@@ -1,4 +1,4 @@
-package `is`.xyz.mpv.preferences
+package `is`.xyz.mpv.ntm3d.preferences
 
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -15,7 +15,7 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
 import com.google.android.material.color.DynamicColors
-import `is`.xyz.mpv.R
+import `is`.xyz.mpv.ntm3d.R
 
 class PreferenceActivity : AppCompatActivity(),
     PreferenceFragmentCompat.OnPreferenceStartFragmentCallback,
