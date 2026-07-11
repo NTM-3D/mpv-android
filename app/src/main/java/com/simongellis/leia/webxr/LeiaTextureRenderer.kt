@@ -47,8 +47,8 @@ class LeiaTextureRenderer {
 
     // The known aspect ratio of a single eye's content (mpv is configured with
     // keepaspect=no for stereo modes, so this is the only place aspect ratio is
-    // enforced). Updated dynamically when the video changes or the stereo mode changes.
-    private var contentAspect = 16f / 9f
+    // enforced). All source material for this app is 16:9 per eye.
+    private val contentAspect = 16f / 9f
 
     private val letterboxMatrix = FloatArray(16)
     private val drawMv = FloatArray(16)
@@ -67,10 +67,6 @@ class LeiaTextureRenderer {
 
     fun getSwapImages(): Boolean {
         return swapImages
-    }
-
-    fun setContentAspect(aspect: Float) {
-        if (aspect > 0f) contentAspect = aspect
     }
 
     fun addTexture(texture: SurfaceTexture, transform: FloatArray) {
@@ -389,16 +385,20 @@ class LeiaTextureRenderer {
                     float depth = u_SubtitleDepth;
                     // Position: shift independently of scale (positive = move up in screen space = subtract in UV Y)
                     float posY = v_TexCoord.y - u_SubtitlePosition;
-                    // Scale: zoom around the subtitle anchor (bottom-center = 0.85 in UV Y),
-                    // keeping position independent. Divide distance from anchor by scale so
-                    // text grows/shrinks without distorting aspect ratio or moving the baseline.
-                    float anchor = 0.85;
-                    float scaleY = (posY - anchor) / u_SubtitleScale + anchor;
+                    // Scale uniformly around the subtitle anchor point.
+                    // Anchor Y = 0.85 (near the bottom where subtitles live).
+                    // Anchor X = 0.5 (horizontal center of the eye).
+                    // Dividing the distance from anchor by scale makes content larger
+                    // (scale > 1 zooms in) without distorting the aspect ratio.
+                    float anchorY = 0.85;
+                    float anchorX = 0.5;
+                    float scaleY = (posY - anchorY) / u_SubtitleScale + anchorY;
+                    float scaleX = (eyeX - anchorX) / u_SubtitleScale + anchorX;
                     vec2 subCoord;
                     if (v_TexCoord.x < 0.5) {
-                        subCoord = vec2(eyeX + depth, scaleY);
+                        subCoord = vec2(scaleX + depth, scaleY);
                     } else {
-                        subCoord = vec2(eyeX - depth, scaleY);
+                        subCoord = vec2(scaleX - depth, scaleY);
                     }
                     vec4 sub = texture2D(u_SubtitleTexture, subCoord);
                     gl_FragColor = vec4(
