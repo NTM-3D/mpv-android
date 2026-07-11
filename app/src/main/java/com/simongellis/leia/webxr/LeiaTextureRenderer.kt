@@ -384,7 +384,7 @@ class LeiaTextureRenderer {
                     float eyeX = fract(v_TexCoord.x * 2.0);
                     float depth = u_SubtitleDepth;
                     // Position: shift independently of scale (positive = move up in screen space = subtract in UV Y)
-                    float posY = v_TexCoord.y - u_SubtitlePosition;
+                    float posY = v_TexCoord.y - (u_SubtitlePosition / 4.0);
                     // Scale uniformly around the subtitle anchor point.
                     // Anchor Y = 0.85 (near the bottom where subtitles live).
                     // Anchor X = 0.5 (horizontal center of the eye).
@@ -392,8 +392,8 @@ class LeiaTextureRenderer {
                     // (scale > 1 zooms in) without distorting the aspect ratio.
                     float anchorY = 0.85;
                     float anchorX = 0.5;
-                    float scaleY = (posY - anchorY) / u_SubtitleScale + anchorY;
-                    float scaleX = (eyeX - anchorX) / u_SubtitleScale + anchorX;
+                    float scaleY = (posY - anchorY) / (u_SubtitleScale * 6.0) + anchorY;
+                    float scaleX = (eyeX - anchorX) / (u_SubtitleScale * 6.0) + anchorX;
                     vec2 subCoord;
                     if (v_TexCoord.x < 0.5) {
                         subCoord = vec2(scaleX + depth, scaleY);
@@ -406,9 +406,9 @@ class LeiaTextureRenderer {
                         max(gl_FragColor.a, sub.a)
                     );
                 }
-                if (gl_FragColor.a < 0.1) {
-                    discard;
-                }
+                //if (gl_FragColor.a < 0.1) {
+                //    discard;
+                //}
             }
         """
 
