@@ -1,4 +1,4 @@
-# mpv for Android (NTM 3D fork)
+# mpv for Android (NTM-3D)
 
 This fork of mpv-android focuses on 3D playback for Android devices that support Leia-style stereo rendering.
 
@@ -21,7 +21,6 @@ This fork is based on:
 - Swap-eyes control
 - Adjustable 3D subtitle depth
 - Stereo subtitle rendering
-- Image subtitle handling in 3D mode
 
 ## 3D format detection
 
@@ -40,8 +39,7 @@ If no format is detected, the player defaults to Half SBS when 3D is enabled man
 
 - Text subtitles are rendered as stereo subtitles in 3D mode.
 - Subtitle depth is adjustable from `-10` to `+10`.
-- Image subtitles such as PGS, DVD, DVB, VobSub, and XSub are decoded and rendered in the 3D pipeline when possible.
-- The 3D dialog lets you choose the active format, swap eyes, and set subtitle depth.
+- Image subtitles such as PGS, DVD, DVB, VobSub, and XSub are not supported in 3D as of now.
 
 ## Building
 
