@@ -1,13 +1,16 @@
-# mpv for Android
+# mpv for Android (NTM 3D fork)
 
 [![Build Status](https://github.com/mpv-android/mpv-android/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/mpv-android/mpv-android/actions/workflows/build.yml)
 
 mpv-android is a video player for Android based on [libmpv](https://github.com/mpv-player/mpv).
 
+This fork adds 3D playback support for side-by-side and top-and-bottom formats.
+
 ## Features
 
 * Hardware and software video decoding
 * Gesture-based seeking, volume/brightness control and more
+* 3D playback support for HSBS/TAB content
 * libass support for styled subtitles
 * Secondary (or dual) subtitle support
 * High-quality rendering with advanced settings (scalers, debanding, interpolation, ...)
