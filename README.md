@@ -57,7 +57,3 @@ For a clean build:
 ```
 
 See [buildscripts/README.md](buildscripts/README.md) for more details.
-
-## Intent support
-
-This fork keeps mpv-android's intent-based playback support. See [docs/intent.html](docs/intent.html) for the current package name and intent parameters.
