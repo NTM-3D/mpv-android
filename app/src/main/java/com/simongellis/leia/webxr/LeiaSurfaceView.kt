@@ -60,6 +60,14 @@ open class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSu
         textureRenderer.setSubtitleDepth(depth)
     }
 
+    fun setStereoSubtitlePosition(position: Float) {
+        textureRenderer.setSubtitlePosition(position)
+    }
+
+    fun setStereoSubtitleScale(scale: Float) {
+        textureRenderer.setSubtitleScale(scale)
+    }
+
     override fun setRenderer(renderer: Renderer) {
         Log.i("LeiaSurfaceView", "LeiaSurfaceView.setRenderer")
         var framebuffer = -1

@@ -112,6 +112,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var leiaEnabled = false
     private var currentLeiaFormat = LeiaFormat.NONE
     private var subtitleDepth = 0
+    private var subtitlePosition = 0
+    private var subtitleSize = 0
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
     private var subtitleBitmap: Bitmap? = null
@@ -343,6 +345,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // set up initial UI state
         readSettings()
         applySubtitleDepth(subtitleDepth)
+        applySubtitlePosition(subtitlePosition)
+        applySubtitleSize(subtitleSize)
         onConfigurationChanged(resources.configuration)
         run {
             // edge-to-edge & immersive mode
@@ -586,6 +590,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         this.showMediaTitle = prefs.getBoolean("display_media_title", false)
         this.useTimeRemaining = prefs.getBoolean("use_time_remaining", false)
         this.subtitleDepth = prefs.getInt("subtitle_depth_3d", 0).coerceIn(-10, 10)
+        this.subtitlePosition = prefs.getInt("subtitle_position_3d", 0).coerceIn(-10, 10)
+        this.subtitleSize = prefs.getInt("subtitle_size_3d", 0).coerceIn(-5, 5)
         this.ignoreAudioFocus = prefs.getBoolean("ignore_audio_focus", false)
         this.playlistExitWarning = prefs.getBoolean("playlist_exit_warning", true)
         this.newIntentReplace = prefs.getBoolean("new_intent_replace", false)
@@ -2325,6 +2331,21 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         player.setStereoSubtitleDepth(normalizedDepth)
     }
 
+    private fun applySubtitlePosition(position: Int) {
+        val clamped = position.coerceIn(-10, 10)
+        // Positive position = move up. In UV space (Y=0 at top) moving up means subtracting.
+        // Map range -10..10 to a max shift of 0.3 (30% of screen height).
+        val normalizedPosition = (clamped / 10f) * 0.3f
+        player.setStereoSubtitlePosition(normalizedPosition)
+    }
+
+    private fun applySubtitleSize(size: Int) {
+        val clamped = size.coerceIn(-5, 5)
+        // 0 = 1x scale, +5 = 2x, -5 = 0.5x (exponential feel via linear mapping)
+        val normalizedScale = 1f + clamped * 0.2f
+        player.setStereoSubtitleScale(normalizedScale)
+    }
+
     private fun createSubtitleBitmap(text: String): Bitmap {
         val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
         val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
@@ -2332,31 +2353,57 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val canvas = Canvas(bitmap)
 
         val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
-        val ss = 4  // Supersampling: 4x quality for sharper text
-        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.WHITE
-            textSize = 28f * resources.displayMetrics.scaledDensity * ss
+        // Render at 2x the final pixel width for clean downsampling — more than enough
+        // since the output canvas is already the full hardware buffer resolution (2560px).
+        val ss = 2
+        // Size text at ~4.5% of the render width so it scales naturally with resolution
+        // rather than being tied to display density (which reflects the small physical screen).
+        val textSizePx = width * 0.045f * ss
+        val strokeWidth = textSizePx * 0.12f  // 12% of text size for the outline
+
+        // Outline paint — drawn first, slightly larger, pure black
+        val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+            color = Color.BLACK
+            textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
-            setShadowLayer(6f * ss, 0f, 0f, Color.BLACK)
+            style = Paint.Style.STROKE
+            this.strokeWidth = strokeWidth
+            strokeJoin = Paint.Join.ROUND
+            strokeCap = Paint.Cap.ROUND
         }
-        val layout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, textWidth * ss)
+        // Fill paint — drawn on top, white
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.DITHER_FLAG).apply {
+            color = Color.WHITE
+            textSize = textSizePx
+            textAlign = Paint.Align.LEFT
+            isLinearText = true
+            style = Paint.Style.FILL
+        }
+
+        val layerWidth = textWidth * ss
+        val outlineLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setIncludePad(false)
+            .build()
+        val fillLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
 
-        val textLayer = Bitmap.createBitmap(textWidth * ss, layout.height, Bitmap.Config.ARGB_8888)
+        val textLayer = Bitmap.createBitmap(layerWidth, outlineLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val textCanvas = Canvas(textLayer)
-        layout.draw(textCanvas)
+        outlineLayout.draw(textCanvas)  // black outline first
+        fillLayout.draw(textCanvas)     // white fill on top
 
         // Calculate single-line baseline position
         val bottomMargin = (72f * 0.65f * resources.displayMetrics.density).roundToInt()
-        val singleLineHeight = (textPaint.textSize / ss).roundToInt()
+        val singleLineHeight = (textSizePx / ss).roundToInt()
         val singleLineBaseline = height - bottomMargin - singleLineHeight
-        
+
         // Center multi-line text around single-line baseline
         val left = ((width - textWidth) / 2f)
-        val dstHeight = (layout.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
+        val dstHeight = (textLayer.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
         val top = (singleLineBaseline - dstHeight / 2 + singleLineHeight / 2).coerceAtLeast(0)
         val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
         canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
@@ -2510,6 +2557,18 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             .apply()
     }
 
+    private fun persistSubtitlePosition() {
+        getDefaultSharedPreferences(applicationContext).edit()
+            .putInt("subtitle_position_3d", subtitlePosition)
+            .apply()
+    }
+
+    private fun persistSubtitleSize() {
+        getDefaultSharedPreferences(applicationContext).edit()
+            .putInt("subtitle_size_3d", subtitleSize)
+            .apply()
+    }
+
     private fun updateStereoSubtitleMode() {
         val shouldEnableStereoSubs = isSbs3DActive() && player.sid != -1
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
@@ -2595,6 +2654,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val swapEyesCheck = dialogView.findViewById<CheckBox>(R.id.swapEyesCheck)
         val depthSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.depthSeekBar)
         val depthValue = dialogView.findViewById<android.widget.TextView>(R.id.depthValue)
+        val positionSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.positionSeekBar)
+        val positionValue = dialogView.findViewById<android.widget.TextView>(R.id.positionValue)
+        val sizeSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.sizeSeekBar)
+        val sizeValue = dialogView.findViewById<android.widget.TextView>(R.id.sizeValue)
 
         // Set initial radio selection from current format
         when (currentLeiaFormat) {
@@ -2605,9 +2668,15 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             else -> modeHalfSbs.isChecked = true
         }
 
-        // Restore saved depth
+        // Restore saved values
         depthSeekBar.progress = subtitleDepth + 10
         depthValue.text = if (subtitleDepth >= 0) "+$subtitleDepth" else "$subtitleDepth"
+
+        positionSeekBar.progress = subtitlePosition + 10
+        positionValue.text = if (subtitlePosition >= 0) "+$subtitlePosition" else "$subtitlePosition"
+
+        sizeSeekBar.progress = subtitleSize + 5
+        sizeValue.text = if (subtitleSize >= 0) "+$subtitleSize" else "$subtitleSize"
 
         swapEyesCheck.isChecked = player.getSwapImages()
         swapEyesCheck.setOnCheckedChangeListener { _, isChecked ->
@@ -2628,6 +2697,34 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
         })
 
+        positionSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val position = progress - 10
+                positionValue.text = if (position >= 0) "+$position" else "$position"
+                if (fromUser) {
+                    subtitlePosition = position
+                    applySubtitlePosition(subtitlePosition)
+                    persistSubtitlePosition()
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
+        sizeSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val size = progress - 5
+                sizeValue.text = if (size >= 0) "+$size" else "$size"
+                if (fromUser) {
+                    subtitleSize = size
+                    applySubtitleSize(subtitleSize)
+                    persistSubtitleSize()
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
         lateinit var dialog: AlertDialog
         dialog = with(AlertDialog.Builder(this)) {
             setTitle(R.string.title_3d_dialog)
@@ -2642,7 +2739,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     else -> LeiaFormat.HALF_SBS
                 }
                 subtitleDepth = depthSeekBar.progress - 10
+                subtitlePosition = positionSeekBar.progress - 10
+                subtitleSize = sizeSeekBar.progress - 5
                 persistSubtitleDepth()
+                persistSubtitlePosition()
+                persistSubtitleSize()
                 apply3DMode(newFormat)
                 restore()
             }

@@ -34,12 +34,16 @@ class LeiaTextureRenderer {
     private var subtitleTexLocation = -1
     private var subtitleEnabledLocation = -1
     private var subtitleDepthLocation = -1
+    private var subtitlePositionLocation = -1
+    private var subtitleScaleLocation = -1
 
     private var subtitleTextureId = -1
     @Volatile private var subtitleBitmap: Bitmap? = null
     @Volatile private var subtitleBitmapDirty = false
     @Volatile private var subtitleEnabled = false
     @Volatile private var subtitleDepth = 0f
+    @Volatile private var subtitlePosition = 0f
+    @Volatile private var subtitleScale = 1f
 
     // The known aspect ratio of a single eye's content (mpv is configured with
     // keepaspect=no for stereo modes, so this is the only place aspect ratio is
@@ -83,6 +87,14 @@ class LeiaTextureRenderer {
         subtitleDepth = depth
     }
 
+    fun setSubtitlePosition(position: Float) {
+        subtitlePosition = position
+    }
+
+    fun setSubtitleScale(scale: Float) {
+        subtitleScale = scale
+    }
+
     fun onSurfaceCreated() {
         Log.i(TAG, "onSurfaceCreated")
         val textureIds = IntArray(textureHolders.size)
@@ -108,6 +120,8 @@ class LeiaTextureRenderer {
         subtitleTexLocation = glGetUniformLocation(program, "u_SubtitleTexture")
         subtitleEnabledLocation = glGetUniformLocation(program, "u_SubtitleEnabled")
         subtitleDepthLocation = glGetUniformLocation(program, "u_SubtitleDepth")
+        subtitlePositionLocation = glGetUniformLocation(program, "u_SubtitlePosition")
+        subtitleScaleLocation = glGetUniformLocation(program, "u_SubtitleScale")
 
         val ids = IntArray(1)
         glGenTextures(1, ids, 0)
@@ -215,6 +229,8 @@ class LeiaTextureRenderer {
         logError("bind swapImages location")
         glUniform1i(subtitleEnabledLocation, if (subtitleEnabled) 1 else 0)
         glUniform1f(subtitleDepthLocation, subtitleDepth)
+        glUniform1f(subtitlePositionLocation, subtitlePosition)
+        glUniform1f(subtitleScaleLocation, subtitleScale)
 
         glActiveTexture(GL_TEXTURE1)
         glBindTexture(GL_TEXTURE_2D, subtitleTextureId)
@@ -304,6 +320,8 @@ class LeiaTextureRenderer {
             uniform int u_SwapImages;
             uniform int u_SubtitleEnabled;
             uniform float u_SubtitleDepth;
+            uniform float u_SubtitlePosition;
+            uniform float u_SubtitleScale;
             void main() {
                 vec2 coord = v_TexCoord;
 
@@ -365,11 +383,14 @@ class LeiaTextureRenderer {
                 if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 2 || u_Mode == 3)) {
                     float eyeX = fract(v_TexCoord.x * 2.0);
                     float depth = u_SubtitleDepth;
+                    // Apply position (positive = move up = subtract from Y in UV space where 0=top)
+                    // Apply scale around center (0.5, 0.5)
+                    float subY = (v_TexCoord.y - 0.5) / u_SubtitleScale + 0.5 - u_SubtitlePosition;
                     vec2 subCoord;
                     if (v_TexCoord.x < 0.5) {
-                        subCoord = vec2(eyeX + depth, v_TexCoord.y);
+                        subCoord = vec2(eyeX + depth, subY);
                     } else {
-                        subCoord = vec2(eyeX - depth, v_TexCoord.y);
+                        subCoord = vec2(eyeX - depth, subY);
                     }
                     vec4 sub = texture2D(u_SubtitleTexture, subCoord);
                     gl_FragColor = vec4(
