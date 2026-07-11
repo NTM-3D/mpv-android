@@ -392,8 +392,10 @@ class LeiaTextureRenderer {
                     // (scale > 1 zooms in) without distorting the aspect ratio.
                     float anchorY = 0.85;
                     float anchorX = 0.5;
-                    float scaleY = (posY - anchorY) / (u_SubtitleScale * 6.0) + anchorY;
-                    float scaleX = (eyeX - anchorX) / (u_SubtitleScale * 6.0) + anchorX;
+                    // Compress scale effect to 1/6 strength
+                    float effectiveScale = 1.0 + (u_SubtitleScale - 1.0) / 6.0;
+                    float scaleY = (posY - anchorY) / effectiveScale + anchorY;
+                    float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
                     vec2 subCoord;
                     if (v_TexCoord.x < 0.5) {
                         subCoord = vec2(scaleX + depth, scaleY);
