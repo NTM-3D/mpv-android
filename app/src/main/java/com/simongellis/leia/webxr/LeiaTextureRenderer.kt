@@ -383,14 +383,18 @@ class LeiaTextureRenderer {
                 if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 2 || u_Mode == 3)) {
                     float eyeX = fract(v_TexCoord.x * 2.0);
                     float depth = u_SubtitleDepth;
-                    // Apply position (positive = move up = subtract from Y in UV space where 0=top)
-                    // Apply scale around center (0.5, 0.5)
-                    float subY = (v_TexCoord.y - 0.5) / u_SubtitleScale + 0.5 - u_SubtitlePosition;
+                    // Position: shift independently of scale (positive = move up in screen space = subtract in UV Y)
+                    float posY = v_TexCoord.y - u_SubtitlePosition;
+                    // Scale: zoom around the subtitle anchor (bottom-center = 0.85 in UV Y),
+                    // keeping position independent. Divide distance from anchor by scale so
+                    // text grows/shrinks without distorting aspect ratio or moving the baseline.
+                    float anchor = 0.85;
+                    float scaleY = (posY - anchor) / u_SubtitleScale + anchor;
                     vec2 subCoord;
                     if (v_TexCoord.x < 0.5) {
-                        subCoord = vec2(eyeX + depth, subY);
+                        subCoord = vec2(eyeX + depth, scaleY);
                     } else {
-                        subCoord = vec2(eyeX - depth, subY);
+                        subCoord = vec2(eyeX - depth, scaleY);
                     }
                     vec4 sub = texture2D(u_SubtitleTexture, subCoord);
                     gl_FragColor = vec4(

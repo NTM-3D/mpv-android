@@ -2334,8 +2334,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun applySubtitlePosition(position: Int) {
         val clamped = position.coerceIn(-10, 10)
         // Positive position = move up. In UV space (Y=0 at top) moving up means subtracting.
-        // Map range -10..10 to a max shift of 0.3 (30% of screen height).
-        val normalizedPosition = (clamped / 10f) * 0.3f
+        // Map range -10..10 to ±0.4 (40% of screen height) so subtitles can reach into letterbox.
+        val normalizedPosition = (clamped / 10f) * 0.4f
         player.setStereoSubtitlePosition(normalizedPosition)
     }
 
