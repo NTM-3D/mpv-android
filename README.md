@@ -1,42 +1,65 @@
 # mpv for Android (NTM 3D fork)
 
-[![Build Status](https://github.com/mpv-android/mpv-android/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/mpv-android/mpv-android/actions/workflows/build.yml)
+This fork of mpv-android focuses on 3D playback for Android devices that support Leia-style stereo rendering.
 
-mpv-android is a video player for Android based on [libmpv](https://github.com/mpv-player/mpv).
+## Credits
 
-This fork adds 3D playback support for side-by-side and top-and-bottom formats.
+This fork is based on:
 
-## Features
+- [mpv-android/mpv-android](https://github.com/mpv-android/mpv-android)
+- [jakedowns/mpv-android](https://github.com/jakedowns/mpv-android)
 
-* Hardware and software video decoding
-* Gesture-based seeking, volume/brightness control and more
-* 3D playback support for HSBS/TAB content
-* libass support for styled subtitles
-* Secondary (or dual) subtitle support
-* High-quality rendering with advanced settings (scalers, debanding, interpolation, ...)
-* Play network streams with the "Open URL" function
-* Background playback, Picture-in-Picture, keyboard input supported
+## What this fork adds
 
-### Library?
+- 3D playback support for:
+  - Half SBS
+  - Half TAB
+  - Full SBS
+  - Full TAB
+- Automatic 3D format detection from filenames
+- Manual 3D mode selection
+- Swap-eyes control
+- Adjustable 3D subtitle depth
+- Stereo subtitle rendering
+- Image subtitle handling in 3D mode
 
-mpv-android is **not** a library/module (AAR) you can import into your app.
+## 3D format detection
 
-If you'd like to use libmpv in your app you can use our code as inspiration.
-The important parts are [`MPVLib`](app/src/main/java/is/xyz/mpv/MPVLib.kt), [`BaseMPVView`](app/src/main/java/is/xyz/mpv/BaseMPVView.kt) and the [native code](app/src/main/jni/).
-Native code is built by [these scripts](buildscripts/).
+The player recognizes these filename markers:
 
-## Downloads
+| Format | Auto-detected names |
+| --- | --- |
+| Half SBS | `hsbs`, `half-sbs`, `half_sbs`, `sbs-half`, `sbs_half`, `half_2x1`, `sbs` |
+| Half TAB | `htab`, `half-tab`, `half_tab`, `tab-half`, `tab_half`, `half_1x2`, `tab`, `ou`, `overunder`, `over-under`, `over_under`, `topbottom`, `top-bottom`, `top_bottom`, `tb` |
+| Full SBS | `fsbs`, `full-sbs`, `full_sbs`, `sbs-full`, `sbs_full`, `full_2x1`, camera-style `sv_YYYYMMDD...` filenames |
+| Full TAB | `ftab`, `full-tab`, `full_tab`, `tab-full`, `tab_full`, `full_1x2`, `full-ou`, `full_ou`, `full-overunder` |
 
-You can download mpv-android from the [Releases section](https://github.com/mpv-android/mpv-android/releases) or
+If no format is detected, the player defaults to Half SBS when 3D is enabled manually.
 
-[<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png" alt="Get it on Google Play" height="80">](https://play.google.com/store/apps/details?id=is.xyz.mpv.ntm3d)
+## 3D subtitles
 
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">](https://f-droid.org/packages/is.xyz.mpv.ntm3d)
+- Text subtitles are rendered as stereo subtitles in 3D mode.
+- Subtitle depth is adjustable from `-10` to `+10`.
+- Image subtitles such as PGS, DVD, DVB, VobSub, and XSub are decoded and rendered in the 3D pipeline when possible.
+- The 3D dialog lets you choose the active format, swap eyes, and set subtitle depth.
 
-**Note**: Android TV is supported, but only available on F-Droid or by installing the APK manually.
+## Building
 
-## Building from source
+Use the project build script:
 
-Take a look at the [README](buildscripts/README.md) inside the `buildscripts` directory.
+```sh
+cd buildscripts
+./buildall.sh
+```
 
-Some other documentation can be found at this [link](http://mpv-android.github.io/mpv-android/).
+For a clean build:
+
+```sh
+./buildall.sh --clean
+```
+
+See [buildscripts/README.md](buildscripts/README.md) for more details.
+
+## Intent support
+
+This fork keeps mpv-android's intent-based playback support. See [docs/intent.html](docs/intent.html) for the current package name and intent parameters.
