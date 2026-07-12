@@ -340,13 +340,18 @@ class LeiaTextureRenderer {
             uniform float u_SubtitlePosition;
             uniform float u_SubtitleScale;
             void main() {
-                // The quad now covers the full screen (letterboxing is no longer
-                // baked into vertex positions), so map the full-screen v_TexCoord
-                // into the letterboxed content area here. Pixels that land outside
-                // [0,1] are in the black bars, not on the video at all.
-                vec2 contentCoord = (v_TexCoord - 0.5) / u_LetterboxScale + 0.5;
-                bool inContent = contentCoord.x >= 0.0 && contentCoord.x <= 1.0 &&
-                        contentCoord.y >= 0.0 && contentCoord.y <= 1.0;
+                // Apply letterboxing in eye-local coordinates so each eye gets
+                // symmetric bars. Doing this in full-screen coordinates would skew
+                // pillarboxing across the left/right eye halves.
+                float eyeIndex = step(0.5, v_TexCoord.x);
+                vec2 eyeCoord = vec2(fract(v_TexCoord.x * 2.0), v_TexCoord.y);
+                vec2 eyeContentCoord = (eyeCoord - 0.5) / u_LetterboxScale + 0.5;
+                bool inContent = eyeContentCoord.x >= 0.0 && eyeContentCoord.x <= 1.0 &&
+                    eyeContentCoord.y >= 0.0 && eyeContentCoord.y <= 1.0;
+                vec2 contentCoord = vec2(
+                    (eyeContentCoord.x * 0.5) + (eyeIndex * 0.5),
+                    eyeContentCoord.y
+                );
 
                 if (inContent) {
                     vec2 coord = contentCoord;
