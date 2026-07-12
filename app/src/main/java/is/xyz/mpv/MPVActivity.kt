@@ -2442,10 +2442,16 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // Canvas silently crop whatever falls outside [0, height] was cutting
         // off (and visually smearing, once sampled by the shader) the outermost
         // line. There's plenty of vertical screen space; just use it.
+        // Keep a small margin off the true edges too: content sitting flush
+        // against row 0/height gets sampled by the shader's zoom at the exact
+        // texture boundary, which GL_CLAMP_TO_EDGE + bilinear filtering can
+        // stretch into a thin vertical streak.
         val left = ((width - textWidth) / 2f)
         val dstHeight = (textLayer.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
         val idealTop = singleLineBaseline - dstHeight / 2 + singleLineHeight / 2
-        val top = idealTop.coerceIn(0, (height - dstHeight).coerceAtLeast(0))
+        val edgeMargin = (singleLineHeight * 0.25f).roundToInt().coerceAtLeast(1)
+        val maxTop = (height - dstHeight - edgeMargin).coerceAtLeast(edgeMargin)
+        val top = idealTop.coerceIn(edgeMargin, maxTop)
         val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
         canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         textLayer.recycle()
