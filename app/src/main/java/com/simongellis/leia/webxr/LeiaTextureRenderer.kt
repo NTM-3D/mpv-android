@@ -411,7 +411,7 @@ class LeiaTextureRenderer {
                 // Mode 2 outputs SBS after TAB transformation
                 if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 2 || u_Mode == 3)) {
                     float eyeX = fract(v_TexCoord.x * 2.0);
-                    float depth = u_SubtitleDepth;
+                    float depth = u_SubtitleDepth * 2.0;
                     // Position: shift independently of scale (positive = move up in screen space = add in UV Y)
                     float posY = v_TexCoord.y + (u_SubtitlePosition / 4.0);
                     // Scale uniformly around the subtitle anchor point.
@@ -437,9 +437,6 @@ class LeiaTextureRenderer {
                         max(gl_FragColor.a, sub.a)
                     );
                 }
-                //if (gl_FragColor.a < 0.1) {
-                //    discard;
-                //}
             }
         """
 
