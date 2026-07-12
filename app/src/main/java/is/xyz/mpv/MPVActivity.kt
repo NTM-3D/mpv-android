@@ -1840,6 +1840,16 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_SCREEN_PORTRAIT))
             return
 
+        // 3D (Leia) playback only works in landscape on this hardware. Lock to
+        // landscape whenever it's active, overriding both the user's rotation
+        // setting and the raw-frame-aspect logic below — a packed stereo format
+        // like half-TAB can have a raw frame aspect under 1 (e.g. 1920x2400)
+        // even though each eye's actual content is landscape.
+        if (isSbs3DActive()) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            return
+        }
+
         if (autoRotationMode != "auto") {
             if (!initial)
                 return // don't reset at runtime
@@ -2426,10 +2436,16 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val singleLineHeight = (textSizePx / ss).roundToInt()
         val singleLineBaseline = height - bottomMargin - singleLineHeight
 
-        // Center multi-line text around single-line baseline
+        // Center multi-line text around single-line baseline, but never let the
+        // block run past the top or bottom of the canvas — for 3+ line subtitles
+        // the block is taller than a single line's margin allows, and letting
+        // Canvas silently crop whatever falls outside [0, height] was cutting
+        // off (and visually smearing, once sampled by the shader) the outermost
+        // line. There's plenty of vertical screen space; just use it.
         val left = ((width - textWidth) / 2f)
         val dstHeight = (textLayer.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
-        val top = (singleLineBaseline - dstHeight / 2 + singleLineHeight / 2).coerceAtLeast(0)
+        val idealTop = singleLineBaseline - dstHeight / 2 + singleLineHeight / 2
+        val top = idealTop.coerceIn(0, (height - dstHeight).coerceAtLeast(0))
         val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
         canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         textLayer.recycle()
@@ -2845,6 +2861,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
         applyLeiaDisplayProperties(format, leiaEnabled)
         updateLeiaContentAspect()
+        updateOrientation()
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
         updateStereoSubtitleMode()
