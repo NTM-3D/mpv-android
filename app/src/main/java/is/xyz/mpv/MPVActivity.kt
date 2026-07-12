@@ -110,6 +110,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var mPrevDesiredBacklightModeState = false
     private lateinit var sdk: LeiaSDK
     private var leiaEnabled = false
+    private var loggedFirstImageSubtitleFrame = false
     private var currentLeiaFormat = LeiaFormat.NONE
     private var subtitleDepth = 0
     private var subtitlePosition = 0
