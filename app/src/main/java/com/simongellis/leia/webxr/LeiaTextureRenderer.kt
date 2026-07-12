@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20.*
-import android.opengl.Matrix
 import android.opengl.GLUtils
 import android.util.Log
 import android.util.Size
@@ -29,6 +28,7 @@ class LeiaTextureRenderer {
     private var texCoordLocation = -1
     private var mvLocation = -1
     private var texLocation = -1
+    private var letterboxScaleLocation = -1
     private var modeLocation = -1
     private var swapImagesLocation = -1
     private var subtitleTexLocation = -1
@@ -45,16 +45,28 @@ class LeiaTextureRenderer {
     @Volatile private var subtitlePosition = 0f
     @Volatile private var subtitleScale = 1f
 
-    // The known aspect ratio of a single eye's content (mpv is configured with
+    // The aspect ratio of a single eye's content (mpv is configured with
     // keepaspect=no for stereo modes, so this is the only place aspect ratio is
-    // enforced). All source material for this app is 16:9 per eye.
-    private val contentAspect = 16f / 9f
-
-    private val letterboxMatrix = FloatArray(16)
-    private val drawMv = FloatArray(16)
+    // enforced). Defaults to 16:9 but should be updated via setContentAspect()
+    // once the real video dimensions are known, since not all source material
+    // is 16:9 per eye.
+    private var contentAspect = 16f / 9f
 
     fun setMode(value: Int) {
         mode = value
+    }
+
+    /**
+     * Sets the aspect ratio of a single eye's content, used to letterbox/pillarbox
+     * the video so it isn't stretched. Callers should compute this from the actual
+     * video dimensions (e.g. mpv's width/height) combined with the current [mode],
+     * since half-SBS/half-TAB sources pack both eyes into one frame and so only
+     * half the width/height belongs to a single eye.
+     */
+    fun setContentAspect(aspect: Float) {
+        if (aspect > 0f) {
+            contentAspect = aspect
+        }
     }
 
     fun getMode(): Int {
@@ -115,6 +127,7 @@ class LeiaTextureRenderer {
         texCoordLocation = glGetAttribLocation(program, "a_TexCoord")
         mvLocation = glGetUniformLocation(program, "u_MV")
         texLocation = glGetUniformLocation(program, "u_Texture")
+        letterboxScaleLocation = glGetUniformLocation(program, "u_LetterboxScale")
         modeLocation = glGetUniformLocation(program, "u_Mode")
         swapImagesLocation = glGetUniformLocation(program, "u_SwapImages")
         subtitleTexLocation = glGetUniformLocation(program, "u_SubtitleTexture")
@@ -164,11 +177,14 @@ class LeiaTextureRenderer {
     }
 
     /**
-     * Build a scale matrix that shrinks the full-screen quad so its displayed
-     * aspect ratio matches contentAspect, leaving black bars (via glClear above)
-     * on whichever axis the screen's own aspect ratio doesn't match.
+     * Computes the (scaleX, scaleY) factors that shrink the content within the
+     * full-screen quad so its displayed aspect ratio matches contentAspect,
+     * leaving black bars on whichever axis the screen's own aspect ratio doesn't
+     * match. Applied in the fragment shader (via u_LetterboxScale) rather than to
+     * the quad's vertex positions, so the quad itself still covers the entire
+     * screen and overlays like subtitles aren't clipped to the letterboxed area.
      */
-    private fun computeLetterboxMatrix(): FloatArray {
+    private fun computeLetterboxScale(): Pair<Float, Float> {
         val screenAspect = size.width.toFloat() / size.height.toFloat()
         var scaleX = 1f
         var scaleY = 1f
@@ -179,9 +195,7 @@ class LeiaTextureRenderer {
             // Screen is relatively taller than the content: letterbox (shrink Y).
             scaleY = screenAspect / contentAspect
         }
-        Matrix.setIdentityM(letterboxMatrix, 0)
-        Matrix.scaleM(letterboxMatrix, 0, scaleX, scaleY, 1f)
-        return letterboxMatrix
+        return Pair(scaleX, scaleY)
     }
 
     private fun renderTexture(holder: TextureHolder) {
@@ -202,7 +216,7 @@ class LeiaTextureRenderer {
 
         holder.tryUpdateTexImage()
         val textureId = holder.textureId
-        Matrix.multiplyMM(drawMv, 0, holder.transform, 0, computeLetterboxMatrix(), 0)
+        val (letterboxScaleX, letterboxScaleY) = computeLetterboxScale()
 
         glActiveTexture(GL_TEXTURE0)
         logError("glActiveTexture")
@@ -221,8 +235,10 @@ class LeiaTextureRenderer {
 
         glUniform1i(texLocation, 0)
         logError("bind tex location")
-        glUniformMatrix4fv(mvLocation, 1, false, drawMv, 0)
+        glUniformMatrix4fv(mvLocation, 1, false, holder.transform, 0)
         logError("bind mv location")
+        glUniform2f(letterboxScaleLocation, letterboxScaleX, letterboxScaleY)
+        logError("bind letterbox scale location")
         glUniform1i(modeLocation, mode)
         logError("bind mode location")
         glUniform1i(swapImagesLocation, (if (swapImages) 1 else 0))
@@ -316,6 +332,7 @@ class LeiaTextureRenderer {
             varying vec2 v_TexCoord;
             uniform samplerExternalOES u_Texture;
             uniform sampler2D u_SubtitleTexture;
+            uniform vec2 u_LetterboxScale;
             uniform int u_Mode;
             uniform int u_SwapImages;
             uniform int u_SubtitleEnabled;
@@ -323,68 +340,80 @@ class LeiaTextureRenderer {
             uniform float u_SubtitlePosition;
             uniform float u_SubtitleScale;
             void main() {
-                vec2 coord = v_TexCoord;
+                // The quad now covers the full screen (letterboxing is no longer
+                // baked into vertex positions), so map the full-screen v_TexCoord
+                // into the letterboxed content area here. Pixels that land outside
+                // [0,1] are in the black bars, not on the video at all.
+                vec2 contentCoord = (v_TexCoord - 0.5) / u_LetterboxScale + 0.5;
+                bool inContent = contentCoord.x >= 0.0 && contentCoord.x <= 1.0 &&
+                        contentCoord.y >= 0.0 && contentCoord.y <= 1.0;
 
-                if (u_Mode == 0) {
-                    // 2D passthrough: fill both eye halves with the full frame so
-                    // the Leia interlace hardware sees identical content in both eyes.
-                    coord.x = fract(v_TexCoord.x * 2.0);
-                } else if (u_Mode == 1) {
-                    // Half-SBS: left half of input = left eye, right half = right eye.
-                    // No x-remapping needed; mpv lays the content out that way already.
-                    // Swap just mirrors the two halves.
-                    if (u_SwapImages == 1) {
-                        coord.x = mod(coord.x + 0.5, 1.0);
+                if (inContent) {
+                    vec2 coord = contentCoord;
+
+                    if (u_Mode == 0) {
+                        // 2D passthrough: fill both eye halves with the full frame so
+                        // the Leia interlace hardware sees identical content in both eyes.
+                        coord.x = fract(contentCoord.x * 2.0);
+                    } else if (u_Mode == 1) {
+                        // Half-SBS: left half of input = left eye, right half = right eye.
+                        // No x-remapping needed; mpv lays the content out that way already.
+                        // Swap just mirrors the two halves.
+                        if (u_SwapImages == 1) {
+                            coord.x = mod(coord.x + 0.5, 1.0);
+                        }
+                    } else if (u_Mode == 2) {
+                        // Half-TAB: top half of texture = left eye, bottom half = right eye.
+                        // mpv is configured with keepaspect=no for stereo modes, so the
+                        // composite frame fills the buffer edge-to-edge and the eye
+                        // boundary always lands exactly at the halfway point.
+                        if (u_SwapImages == 0) {
+                            if (contentCoord.x < 0.5) {
+                                coord.x = contentCoord.x * 2.0;
+                                coord.y = contentCoord.y * 0.5;
+                            } else {
+                                coord.x = (contentCoord.x - 0.5) * 2.0;
+                                coord.y = 0.5 + contentCoord.y * 0.5;
+                            }
+                        } else {
+                            if (contentCoord.x < 0.5) {
+                                coord.x = contentCoord.x * 2.0;
+                                coord.y = 0.5 + contentCoord.y * 0.5;
+                            } else {
+                                coord.x = (contentCoord.x - 0.5) * 2.0;
+                                coord.y = contentCoord.y * 0.5;
+                            }
+                        }
+                    } else if (u_Mode == 3) {
+                        // Full-SBS: explicit per-eye x remap.
+                        // Each eye samples its own half-frame using eye-local x [0..1].
+                        float eyeX = fract(contentCoord.x * 2.0);
+                        if (u_SwapImages == 0) {
+                            if (contentCoord.x < 0.5) {
+                                coord.x = eyeX * 0.5;
+                            } else {
+                                coord.x = 0.5 + eyeX * 0.5;
+                            }
+                        } else {
+                            if (contentCoord.x < 0.5) {
+                                coord.x = 0.5 + eyeX * 0.5;
+                            } else {
+                                coord.x = eyeX * 0.5;
+                            }
+                        }
                     }
-                } else if (u_Mode == 2) {
-                    // Half-TAB: top half of texture = left eye, bottom half = right eye.
-                    // mpv is configured with keepaspect=no for stereo modes, so the
-                    // composite frame fills the buffer edge-to-edge and the eye
-                    // boundary always lands exactly at the halfway point.
-                    if (u_SwapImages == 0) {
-                        if (v_TexCoord.x < 0.5) {
-                            coord.x = v_TexCoord.x * 2.0;
-                            coord.y = v_TexCoord.y * 0.5;
-                        } else {
-                            coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = 0.5 + v_TexCoord.y * 0.5;
-                        }
-                    } else {
-                        if (v_TexCoord.x < 0.5) {
-                            coord.x = v_TexCoord.x * 2.0;
-                            coord.y = 0.5 + v_TexCoord.y * 0.5;
-                        } else {
-                            coord.x = (v_TexCoord.x - 0.5) * 2.0;
-                            coord.y = v_TexCoord.y * 0.5;
-                        }
-                    }
-                } else if (u_Mode == 3) {
-                    // Full-SBS: explicit per-eye x remap.
-                    // Each eye samples its own half-frame using eye-local x [0..1].
-                    float eyeX = fract(v_TexCoord.x * 2.0);
-                    if (u_SwapImages == 0) {
-                        if (v_TexCoord.x < 0.5) {
-                            coord.x = eyeX * 0.5;
-                        } else {
-                            coord.x = 0.5 + eyeX * 0.5;
-                        }
-                    } else {
-                        if (v_TexCoord.x < 0.5) {
-                            coord.x = 0.5 + eyeX * 0.5;
-                        } else {
-                            coord.x = eyeX * 0.5;
-                        }
-                    }
+
+                    gl_FragColor = texture2D(u_Texture, coord);
+                } else {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                 }
-
-                gl_FragColor = texture2D(u_Texture, coord);
                 // Subtitles work for all SBS-output modes (1=HALF_SBS, 2=HALF_TAB, 3=FULL_SBS)
                 // Mode 2 outputs SBS after TAB transformation
                 if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 2 || u_Mode == 3)) {
                     float eyeX = fract(v_TexCoord.x * 2.0);
                     float depth = u_SubtitleDepth;
-                    // Position: shift independently of scale (positive = move up in screen space = subtract in UV Y)
-                    float posY = v_TexCoord.y - (u_SubtitlePosition / 4.0);
+                    // Position: shift independently of scale (positive = move up in screen space = add in UV Y)
+                    float posY = v_TexCoord.y + (u_SubtitlePosition / 4.0);
                     // Scale uniformly around the subtitle anchor point.
                     // Anchor Y = 0.85 (near the bottom where subtitles live).
                     // Anchor X = 0.5 (horizontal center of the eye).

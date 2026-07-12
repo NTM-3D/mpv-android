@@ -1999,6 +1999,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             "video-params/aspect", "video-params/rotate" -> {
                 updateOrientation()
                 updatePiPParams()
+                updateLeiaContentAspect()
             }
         }
     }
@@ -2314,6 +2315,30 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun isSbs3DActive(): Boolean {
         return leiaEnabled
+    }
+
+    /**
+     * Recomputes the per-eye content aspect ratio from the raw decoded frame's
+     * aspect ratio and the current stereo packing format, and pushes it to the
+     * Leia renderer so non-16:9 sources are letterboxed correctly instead of
+     * being stretched to an assumed 16:9.
+     */
+    private fun updateLeiaContentAspect() {
+        val rawAspect = player.getVideoAspect()?.toFloat() ?: return
+        if (rawAspect <= 0f) return
+        val perEyeAspect = when (currentLeiaFormat) {
+            // Half formats anamorphically squeeze each eye to fit inside the frame,
+            // so the packed frame's own aspect ratio already equals the per-eye
+            // aspect ratio once unsqueezed for display.
+            LeiaFormat.HALF_SBS, LeiaFormat.HALF_TAB -> rawAspect
+            // Full-SBS packs two unsquashed eyes side by side: each eye is half the frame's width.
+            LeiaFormat.FULL_SBS -> rawAspect / 2f
+            // Full-TAB packs two unsquashed eyes top/bottom: each eye is half the frame's height.
+            LeiaFormat.FULL_TAB -> rawAspect * 2f
+            // 2D passthrough: each eye shows the full, unpacked frame.
+            LeiaFormat.NONE -> rawAspect
+        }
+        player.setContentAspect(perEyeAspect)
     }
 
     private fun sanitizeSubText(raw: String): String {
@@ -2802,6 +2827,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
         }
         applyLeiaDisplayProperties(format, leiaEnabled)
+        updateLeiaContentAspect()
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
         updateStereoSubtitleMode()

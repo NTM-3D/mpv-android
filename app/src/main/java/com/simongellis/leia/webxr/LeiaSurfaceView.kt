@@ -44,6 +44,10 @@ open class LeiaSurfaceView(context: Context, attrs: AttributeSet) : InterlacedSu
         textureRenderer.setMode(value)
     }
 
+    fun setContentAspect(aspect: Float) {
+        textureRenderer.setContentAspect(aspect)
+    }
+
     fun getMode(): Int {
         return textureRenderer.getMode()
     }
