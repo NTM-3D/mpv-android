@@ -2512,11 +2512,28 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             var ok = false
             var selectedPath: String? = null
             for (candidate in pathCandidates) {
-                if (MPVLib.initImageSubtitleDecoder(candidate, ffIndex, subtitleOrder, codecHint)) {
+                if (candidate.startsWith("content://")) {
+                    // ffmpeg's avformat_open_input doesn't understand content:// URIs
+                    // (that's mpv's own Android integration, not something this app's
+                    // bundled ffmpeg has a protocol handler for). Open the URI via the
+                    // ContentResolver instead and hand the native decoder a /proc/self/fd
+                    // path to the already-open descriptor, which regular file I/O can read.
+                    try {
+                        applicationContext.contentResolver.openFileDescriptor(Uri.parse(candidate), "r")?.use { pfd ->
+                            val fdPath = "/proc/self/fd/${pfd.fd}"
+                            if (MPVLib.initImageSubtitleDecoder(fdPath, ffIndex, subtitleOrder, codecHint)) {
+                                ok = true
+                                selectedPath = candidate
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to open content URI for image subtitle decode: $e")
+                    }
+                } else if (MPVLib.initImageSubtitleDecoder(candidate, ffIndex, subtitleOrder, codecHint)) {
                     ok = true
                     selectedPath = candidate
-                    break
                 }
+                if (ok) break
             }
             eventUiHandler.post {
                 if (generation != imageSubtitleDecoderGeneration || !stereoSubtitleModeEnabled || !isImageSubtitleTrackSelected()) {
@@ -2529,7 +2546,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 if (ok) {
                     imageSubtitleDecoderPath = selectedPath
                     imageSubtitleDecoderFailedKey = null
-                    player.setStereoSubtitleDepth(0f)
+                    applySubtitleDepth(subtitleDepth)
                     updateImageSubtitleFrame(player.timePos ?: 0.0)
                 } else {
                     imageSubtitleDecoderFailedKey = requestKey
@@ -2629,7 +2646,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 stopImageSubtitleDecoder(resetNative = true)
                 startImageSubtitleDecoderInit(candidates, ffIndex, subtitleOrder, codecHint)
             }
-            player.setStereoSubtitleDepth(0f)
+            applySubtitleDepth(subtitleDepth)
             if (imageSubtitleDecoderState == ImageSubtitleDecoderState.READY) {
                 updateImageSubtitleFrame(player.timePos ?: 0.0)
             }
