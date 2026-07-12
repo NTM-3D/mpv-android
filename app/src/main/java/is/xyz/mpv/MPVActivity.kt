@@ -589,9 +589,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         this.controlsAtBottom = prefs.getBoolean("bottom_controls", true)
         this.showMediaTitle = prefs.getBoolean("display_media_title", false)
         this.useTimeRemaining = prefs.getBoolean("use_time_remaining", false)
-        this.subtitleDepth = prefs.getInt("subtitle_depth_3d", 0).coerceIn(-10, 10)
-        this.subtitlePosition = prefs.getInt("subtitle_position_3d", 0).coerceIn(-10, 10)
-        this.subtitleSize = prefs.getInt("subtitle_size_3d", 0).coerceIn(-5, 5)
+        this.subtitleDepth = prefs.getInt("subtitle_depth_3d", 0).coerceIn(-15, 15)
+        this.subtitlePosition = prefs.getInt("subtitle_position_3d", 0).coerceIn(-15, 15)
+        this.subtitleSize = prefs.getInt("subtitle_size_3d", 0).coerceIn(-15, 15)
         this.ignoreAudioFocus = prefs.getBoolean("ignore_audio_focus", false)
         this.playlistExitWarning = prefs.getBoolean("playlist_exit_warning", true)
         this.newIntentReplace = prefs.getBoolean("new_intent_replace", false)
@@ -2349,25 +2349,25 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     }
 
     private fun applySubtitleDepth(depth: Int) {
-        val clamped = depth.coerceIn(-10, 10)
-        val maxStereoOffset = 0.006f
-        val normalizedDepth = -(clamped / 10f) * maxStereoOffset
+        val clamped = depth.coerceIn(-15, 15)
+        val maxStereoOffset = 0.012f
+        val normalizedDepth = -(clamped / 15f) * maxStereoOffset
         // Positive depth = pop out; negative = behind screen.
         player.setStereoSubtitleDepth(normalizedDepth)
     }
 
     private fun applySubtitlePosition(position: Int) {
-        val clamped = position.coerceIn(-10, 10)
-        // Positive position = move up. In UV space (Y=0 at top) moving up means subtracting.
-        // Map range -10..10 to ±0.4 (40% of screen height) so subtitles can reach into letterbox.
-        val normalizedPosition = (clamped / 10f) * 0.4f
+        val clamped = position.coerceIn(-15, 15)
+        // Positive position = move up on screen.
+        // Map range -15..15 to ±0.4 (40% of screen height) so subtitles can reach into letterbox.
+        val normalizedPosition = (clamped / 15f) * 0.4f
         player.setStereoSubtitlePosition(normalizedPosition)
     }
 
     private fun applySubtitleSize(size: Int) {
-        val clamped = size.coerceIn(-5, 5)
-        // 0 = 1x scale, +5 = 2x, -5 = 0.5x (exponential feel via linear mapping)
-        val normalizedScale = 1f + clamped * 0.2f
+        val clamped = size.coerceIn(-15, 15)
+        // 0 = 1x scale, +15 = 2x, -15 = 0.5x (exponential feel via linear mapping)
+        val normalizedScale = 1f + clamped * (1f / 15f)
         player.setStereoSubtitleScale(normalizedScale)
     }
 
@@ -2694,13 +2694,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         // Restore saved values
-        depthSeekBar.progress = subtitleDepth + 10
+        depthSeekBar.progress = subtitleDepth + 15
         depthValue.text = if (subtitleDepth >= 0) "+$subtitleDepth" else "$subtitleDepth"
 
-        positionSeekBar.progress = subtitlePosition + 10
+        positionSeekBar.progress = subtitlePosition + 15
         positionValue.text = if (subtitlePosition >= 0) "+$subtitlePosition" else "$subtitlePosition"
 
-        sizeSeekBar.progress = subtitleSize + 5
+        sizeSeekBar.progress = subtitleSize + 15
         sizeValue.text = if (subtitleSize >= 0) "+$subtitleSize" else "$subtitleSize"
 
         swapEyesCheck.isChecked = player.getSwapImages()
@@ -2710,7 +2710,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         depthSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                val depth = progress - 10
+                val depth = progress - 15
                 depthValue.text = if (depth >= 0) "+$depth" else "$depth"
                 if (fromUser) {
                     subtitleDepth = depth
@@ -2724,7 +2724,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         positionSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                val position = progress - 10
+                val position = progress - 15
                 positionValue.text = if (position >= 0) "+$position" else "$position"
                 if (fromUser) {
                     subtitlePosition = position
@@ -2738,7 +2738,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         sizeSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                val size = progress - 5
+                val size = progress - 15
                 sizeValue.text = if (size >= 0) "+$size" else "$size"
                 if (fromUser) {
                     subtitleSize = size
@@ -2763,9 +2763,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     R.id.modeFullTab -> LeiaFormat.FULL_TAB
                     else -> LeiaFormat.HALF_SBS
                 }
-                subtitleDepth = depthSeekBar.progress - 10
-                subtitlePosition = positionSeekBar.progress - 10
-                subtitleSize = sizeSeekBar.progress - 5
+                subtitleDepth = depthSeekBar.progress - 15
+                subtitlePosition = positionSeekBar.progress - 15
+                subtitleSize = sizeSeekBar.progress - 15
                 persistSubtitleDepth()
                 persistSubtitlePosition()
                 persistSubtitleSize()

@@ -81,9 +81,17 @@
         android:background="?android:attr/listDivider" />
 
     <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/title_subtitle_section"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:textStyle="bold" />
+
+    <TextView
         android:id="@+id/depthLabel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
         android:text="@string/label_subtitle_depth"
         android:textAppearance="?android:attr/textAppearanceSmall" />
 
@@ -99,8 +107,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:max="20"
-            android:progress="10" />
+            android:max="30"
+            android:progress="15" />
 
         <TextView
             android:layout_width="40dp"
@@ -132,8 +140,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:max="20"
-            android:progress="10" />
+            android:max="30"
+            android:progress="15" />
 
         <TextView
             android:id="@+id/positionValue"
@@ -165,8 +173,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:max="10"
-            android:progress="5" />
+            android:max="30"
+            android:progress="15" />
 
         <TextView
             android:id="@+id/sizeValue"
