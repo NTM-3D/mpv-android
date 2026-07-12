@@ -2558,7 +2558,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 if (ok) break
             }
             eventUiHandler.post {
+                Log.d(TAG, "LeiaImageSub: decoder init callback ok=$ok selectedPath=$selectedPath generation=$generation/${imageSubtitleDecoderGeneration} stereoSubtitleModeEnabled=$stereoSubtitleModeEnabled")
                 if (generation != imageSubtitleDecoderGeneration || !stereoSubtitleModeEnabled || !isImageSubtitleTrackSelected()) {
+                    Log.w(TAG, "LeiaImageSub: discarding stale/irrelevant decoder init result")
                     if (ok)
                         MPVLib.releaseImageSubtitleDecoder()
                     return@post
@@ -2571,6 +2573,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     applySubtitleDepth(subtitleDepth)
                     updateImageSubtitleFrame(player.timePos ?: 0.0)
                 } else {
+                    Log.e(TAG, "LeiaImageSub: native decoder init FAILED for all candidates: $pathCandidates")
                     imageSubtitleDecoderFailedKey = requestKey
                     subtitleBitmap?.recycle()
                     subtitleBitmap = null
@@ -2605,11 +2608,21 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun updateImageSubtitleFrame(timePosSec: Double) {
         if (!stereoSubtitleModeEnabled || !isImageSubtitleTrackSelected() ||
-            !imageSubtitleDecoderReady || imageSubtitleDecoderState != ImageSubtitleDecoderState.READY)
+            !imageSubtitleDecoderReady || imageSubtitleDecoderState != ImageSubtitleDecoderState.READY) {
+            Log.d(TAG, "LeiaImageSub: updateImageSubtitleFrame gate check failed stereoSubtitleModeEnabled=$stereoSubtitleModeEnabled imageSubtitleDecoderReady=$imageSubtitleDecoderReady decoderState=$imageSubtitleDecoderState")
             return
+        }
         val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
         val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
-        val bmp = MPVLib.renderImageSubtitleAt(timePosSec, width, height) ?: return
+        val bmp = MPVLib.renderImageSubtitleAt(timePosSec, width, height)
+        if (bmp == null) {
+            Log.d(TAG, "LeiaImageSub: renderImageSubtitleAt returned null at t=$timePosSec (${width}x$height) - likely no active event at this timestamp, or unchanged since last call")
+            return
+        }
+        if (!loggedFirstImageSubtitleFrame) {
+            Log.d(TAG, "LeiaImageSub: first bitmap rendered successfully, ${bmp.width}x${bmp.height} at t=$timePosSec")
+            loggedFirstImageSubtitleFrame = true
+        }
         subtitleBitmap?.recycle()
         subtitleBitmap = bmp
         player.setStereoSubtitleBitmap(subtitleBitmap)
@@ -2637,6 +2650,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val shouldEnableStereoSubs = isSbs3DActive() && player.sid != -1
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
         val imageTrack = shouldEnableStereoSubs && isImageSubtitleTrackSelected()
+        Log.d(TAG, "LeiaImageSub: updateStereoSubtitleMode sid=${player.sid} shouldEnableStereoSubs=$shouldEnableStereoSubs imageTrack=$imageTrack")
         MPVLib.setPropertyBoolean("sub-visibility", !shouldEnableStereoSubs)
         player.setStereoSubtitleEnabled(shouldEnableStereoSubs)
         if (!shouldEnableStereoSubs) {
@@ -2649,7 +2663,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val subtitleOrder = selectedTrack?.subtitleOrder
             val codecHint = selectedTrack?.codec
             val candidates = decoderPathCandidates()
+            Log.d(TAG, "LeiaImageSub: imageTrack branch codec=$codecHint ffIndex=$ffIndex subtitleOrder=$subtitleOrder candidates=$candidates")
             if (ffIndex == null || subtitleOrder == null || candidates.isEmpty()) {
+                Log.w(TAG, "LeiaImageSub: bailing out, missing ffIndex/subtitleOrder/candidates")
                 stopImageSubtitleDecoder(resetNative = true)
                 MPVLib.setPropertyBoolean("sub-visibility", true)
                 player.setStereoSubtitleEnabled(false)
@@ -2659,13 +2675,16 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val needInit = !imageSubtitleDecoderReady ||
                 !candidates.contains(imageSubtitleDecoderPath) ||
                 imageSubtitleDecoderFfIndex != ffIndex
+            Log.d(TAG, "LeiaImageSub: needInit=$needInit decoderState=$imageSubtitleDecoderState decoderReady=$imageSubtitleDecoderReady decoderPath=$imageSubtitleDecoderPath")
             if (needInit && imageSubtitleDecoderState != ImageSubtitleDecoderState.INITIALIZING) {
                 if (imageSubtitleDecoderState == ImageSubtitleDecoderState.FAILED &&
                     imageSubtitleDecoderFailedKey == requestKey) {
+                    Log.w(TAG, "LeiaImageSub: previously failed for this exact request, not retrying")
                     persistSubtitleDepth()
                     return
                 }
                 stopImageSubtitleDecoder(resetNative = true)
+                Log.d(TAG, "LeiaImageSub: starting decoder init")
                 startImageSubtitleDecoderInit(candidates, ffIndex, subtitleOrder, codecHint)
             }
             applySubtitleDepth(subtitleDepth)
