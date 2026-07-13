@@ -2139,17 +2139,40 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
             // Detect 3D format for the new file; disable 3D if previous file had it
             val debugTag = "Leia3DFilenameDebug"
-            Log.d(debugTag, "=== MPV PROPERTY DUMP START ===")
-            Log.d(debugTag, "filename: [${MPVLib.getPropertyString("filename")}]")
-            Log.d(debugTag, "path: [${MPVLib.getPropertyString("path")}]")
-            Log.d(debugTag, "media-title: [${MPVLib.getPropertyString("media-title")}]")
-            Log.d(debugTag, "stream-open-filename: [${MPVLib.getPropertyString("stream-open-filename")}]")
-            Log.d(debugTag, "stream-path: [${MPVLib.getPropertyString("stream-path")}]")
-            Log.d(debugTag, "=== MPV PROPERTY DUMP END ===")
+            var resolvedFilename = MPVLib.getPropertyString("filename") ?: ""
+            val path = MPVLib.getPropertyString("path") ?: ""
 
-            // Revert to your original working variable for now so we can see the raw data
-            val filename = MPVLib.getPropertyString("filename") ?: ""
-            val newFormat = detectLeiaFormat(this, filename)
+            Log.d(debugTag, "Intent data: ${intent.dataString}")
+            Log.d(debugTag, "MPV path: $path")
+
+            if (path.startsWith("content://")) {
+                try {
+                    val uri = Uri.parse(path)
+                    val projection = arrayOf(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val cursor = applicationContext.contentResolver.query(uri, projection, null, null, null)
+                    
+                    if (cursor != null) {
+                        Log.d(debugTag, "Cursor count: ${cursor.count}")
+                        if (cursor.moveToFirst()) {
+                            val displayName = cursor.getString(cursor.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
+                            Log.d(debugTag, "Resolved DISPLAY_NAME: $displayName")
+                            if (!displayName.isNullOrEmpty()) {
+                                resolvedFilename = displayName
+                            }
+                        } else {
+                            Log.d(debugTag, "Cursor is empty! moveToFirst() returned false.")
+                        }
+                        cursor.close()
+                    } else {
+                        Log.d(debugTag, "Cursor is NULL! Query failed.")
+                    }
+                } catch (e: Exception) {
+                    Log.e(debugTag, "Exception during query: $e")
+                }
+            }
+
+            Log.d(debugTag, "Final filename passed to detectLeiaFormat: $resolvedFilename")
+            val newFormat = detectLeiaFormat(this, resolvedFilename)
             userForced3DOffForCurrentFile = false
             imageSubtitleDecoderFailedKey = null
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
