@@ -72,8 +72,8 @@ static SubtitleEvent make_event(const AVSubtitle *sub, int canvas_w, int canvas_
     ev.y = min_y;
     ev.w = max_x - min_x;
     ev.h = max_y - min_y;
-    ev.canvas_w = std::max(canvas_w, max_x);
-    ev.canvas_h = std::max(canvas_h, max_y);
+    ev.canvas_w = canvas_w;
+    ev.canvas_h = canvas_h;
     ev.pixels.assign(static_cast<size_t>(ev.w * ev.h), 0U);
 
     for (unsigned i = 0; i < sub->num_rects; ++i) {

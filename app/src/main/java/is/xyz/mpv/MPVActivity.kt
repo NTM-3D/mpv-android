@@ -2668,7 +2668,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
         val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
         val bmp = MPVLib.renderImageSubtitleAt(timePosSec, width, height)
-        Log.d(TAG, "LeiaImageSub: t=$timePosSec (${width}x$height)")
         if (bmp == null) {
             Log.d(TAG, "LeiaImageSub: renderImageSubtitleAt returned null at t=$timePosSec (${width}x$height) - likely no active event at this timestamp, or unchanged since last call")
             return
