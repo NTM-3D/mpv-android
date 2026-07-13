@@ -2561,7 +2561,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubtitleDecoderPath = null
         imageSubtitleDecoderFfIndex = ffIndex
         imageSubtitleDecoderRequestKey = requestKey
-        imageSubtitleInitHandler?.post {
+        Log.d(TAG, "LeiaImageSub: about to post, thread=${imageSubtitleInitThread?.name} isAlive=${imageSubtitleInitThread?.isAlive} handler=$imageSubtitleInitHandler looper=${imageSubtitleInitHandler?.looper}")
+        val postedOk = imageSubtitleInitHandler?.post {
             Log.d(TAG, "LeiaImageSub: background init task STARTED, ${pathCandidates.size} candidate(s): $pathCandidates")
             var ok = false
             var selectedPath: String? = null
@@ -2621,6 +2622,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 }
             }
         }
+        Log.d(TAG, "LeiaImageSub: post() returned $postedOk")
     }
 
     private fun stopImageSubtitleDecoder(resetNative: Boolean, shutdownThread: Boolean = false) {
