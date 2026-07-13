@@ -2719,19 +2719,17 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val lastDot = cleanFilename.lastIndexOf('.')
             val baseName = if (lastDot != -1) cleanFilename.substring(0, lastDot) else cleanFilename
 
-            val extensions = listOf("srt", "ass", "ssa", "vtt")
-            val langs = listOf("", ".en", ".eng", ".es", ".spa", ".fr", ".fre", ".de", ".ger", ".it", ".ita", ".pt", ".por", ".ru", ".rus", ".zh", ".chi", ".jp", ".jpn", ".ko", ".kor", ".se", ".sv", ".fi")
+            // All standard subtitle extensions
+            val extensions = listOf("srt", "ass", "ssa", "vtt", "txt")
 
-            val seenUrls = mutableSetOf<String>()
-            
             for (ext in extensions) {
-                for (lang in langs) {
-                    val subUrl = dirUrl + baseName + lang + "." + ext + queryString
-                    if (seenUrls.add(subUrl)) {
-                        // "auto" flag tells mpv to load it but only select it if it matches slang preferences
-                        onloadCommands.add(arrayOf("sub-add", subUrl, "auto"))
-                    }
-                }
+                // 1. Exact match: filename.ext
+                val exactUrl = "$dirUrl$baseName.$ext$queryString"
+                onloadCommands.add(arrayOf("sub-add", exactUrl, "auto"))
+                
+                // 2. Wildcard match: filename.*.ext
+                val wildcardUrl = "$dirUrl$baseName.*.$ext$queryString"
+                onloadCommands.add(arrayOf("sub-add", wildcardUrl, "auto"))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to guess network subtitles: $e")
