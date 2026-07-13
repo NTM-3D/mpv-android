@@ -69,29 +69,9 @@ typealias StateRestoreCallback = () -> Unit
 
 enum class LeiaFormat { NONE, HALF_SBS, HALF_TAB, FULL_SBS, FULL_TAB }
 
-fun detectLeiaFormat(context: Context?, filename: String): LeiaFormat {
-
-					 
-    val name: String = if (filename.startsWith("content://") && context != null) {
-        val uri = Uri.parse(filename)
-        val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
-        var resolved = filename
-
-        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                resolved = cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
-															 
-										   
-            }
-        }
-
-        resolved.lowercase()
-    } else {
-        filename.substringAfterLast('/').lowercase()
-    }
-
+fun detectLeiaFormat(filename: String): LeiaFormat {
+    val name = filename.lowercase()
     val tokenBoundary = "[\\s._\\-\\[\\]\\(\\)]"
-
     fun hasToken(token: String): Boolean {
         val pattern = "(^|$tokenBoundary)${Regex.escape(token)}($tokenBoundary|$)"
         return Regex(pattern).containsMatchIn(name)
@@ -2142,9 +2122,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             var resolvedFilename = MPVLib.getPropertyString("filename") ?: ""
             val path = MPVLib.getPropertyString("path") ?: ""
 
-            Log.d(debugTag, "Intent data: ${intent.dataString}")
-            Log.d(debugTag, "MPV path: $path")
-
             if (path.startsWith("content://")) {
                 try {
                     val uri = Uri.parse(path)
@@ -2152,10 +2129,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     val cursor = applicationContext.contentResolver.query(uri, projection, null, null, null)
                     
                     if (cursor != null) {
-                        Log.d(debugTag, "Cursor count: ${cursor.count}")
                         if (cursor.moveToFirst()) {
                             val displayName = cursor.getString(cursor.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME))
-                            Log.d(debugTag, "Resolved DISPLAY_NAME: $displayName")
+                            //Log.d(debugTag, "Resolved DISPLAY_NAME: $displayName")
                             if (!displayName.isNullOrEmpty()) {
                                 resolvedFilename = displayName
                             }
@@ -2171,8 +2147,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 }
             }
 
-            Log.d(debugTag, "Final filename passed to detectLeiaFormat: $resolvedFilename")
-            val newFormat = detectLeiaFormat(this, resolvedFilename)
+            //Log.d(debugTag, "Final filename passed to detectLeiaFormat: $resolvedFilename")
+            val newFormat = detectLeiaFormat(resolvedFilename)
             userForced3DOffForCurrentFile = false
             imageSubtitleDecoderFailedKey = null
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
