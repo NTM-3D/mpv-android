@@ -27,6 +27,7 @@ import android.media.AudioManager
 import android.net.Uri
 import android.os.*
 import android.preference.PreferenceManager.getDefaultSharedPreferences
+import android.provider.OpenableColumns
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.text.Layout
@@ -70,18 +71,23 @@ enum class LeiaFormat { NONE, HALF_SBS, HALF_TAB, FULL_SBS, FULL_TAB }
 
 fun detectLeiaFormat(context: Context?, filename: String): LeiaFormat {
 
-    val name = when {
-        filename.startsWith("content://") && context != null -> {
-            val uri = Uri.parse(filename)
-            val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
-            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
-                        ?.lowercase() ?: filename.lowercase()
-                } else filename.lowercase()
+					 
+    val name: String = if (filename.startsWith("content://") && context != null) {
+        val uri = Uri.parse(filename)
+        val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
+        var resolved = filename
+
+        context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                resolved = cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
+															 
+										   
             }
         }
-        else -> filename.substringAfterLast('/').lowercase()
+
+        resolved.lowercase()
+    } else {
+        filename.substringAfterLast('/').lowercase()
     }
 
     val tokenBoundary = "[\\s._\\-\
