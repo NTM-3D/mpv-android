@@ -90,11 +90,7 @@ fun detectLeiaFormat(context: Context?, filename: String): LeiaFormat {
         filename.substringAfterLast('/').lowercase()
     }
 
-    val tokenBoundary = "[\\s._\\-\
-
-\[\\]
-
-\\(\\)]"
+    val tokenBoundary = "[\\s._\\-\\[\\]\\(\\)]"
 
     fun hasToken(token: String): Boolean {
         val pattern = "(^|$tokenBoundary)${Regex.escape(token)}($tokenBoundary|$)"
