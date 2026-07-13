@@ -2562,9 +2562,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubtitleDecoderFfIndex = ffIndex
         imageSubtitleDecoderRequestKey = requestKey
         imageSubtitleInitHandler?.post {
+            Log.d(TAG, "LeiaImageSub: background init task STARTED, ${pathCandidates.size} candidate(s): $pathCandidates")
             var ok = false
             var selectedPath: String? = null
             for (candidate in pathCandidates) {
+                Log.d(TAG, "LeiaImageSub: trying candidate: $candidate")
                 if (candidate.startsWith("content://")) {
                     // ffmpeg's avformat_open_input doesn't understand content:// URIs
                     // (that's mpv's own Android integration, not something this app's
@@ -2574,20 +2576,27 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     try {
                         applicationContext.contentResolver.openFileDescriptor(Uri.parse(candidate), "r")?.use { pfd ->
                             val fdPath = "/proc/self/fd/${pfd.fd}"
+                            Log.d(TAG, "LeiaImageSub: calling native initImageSubtitleDecoder with fd path $fdPath")
                             if (MPVLib.initImageSubtitleDecoder(fdPath, ffIndex, subtitleOrder, codecHint)) {
                                 ok = true
                                 selectedPath = candidate
                             }
+                            Log.d(TAG, "LeiaImageSub: native call returned, ok=$ok")
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to open content URI for image subtitle decode: $e")
                     }
-                } else if (MPVLib.initImageSubtitleDecoder(candidate, ffIndex, subtitleOrder, codecHint)) {
-                    ok = true
-                    selectedPath = candidate
+                } else {
+                    Log.d(TAG, "LeiaImageSub: calling native initImageSubtitleDecoder with path $candidate")
+                    if (MPVLib.initImageSubtitleDecoder(candidate, ffIndex, subtitleOrder, codecHint)) {
+                        ok = true
+                        selectedPath = candidate
+                    }
+                    Log.d(TAG, "LeiaImageSub: native call returned, ok=$ok")
                 }
                 if (ok) break
             }
+            Log.d(TAG, "LeiaImageSub: background init task FINISHED ok=$ok selectedPath=$selectedPath")
             eventUiHandler.post {
                 Log.d(TAG, "LeiaImageSub: decoder init callback ok=$ok selectedPath=$selectedPath generation=$generation/${imageSubtitleDecoderGeneration} stereoSubtitleModeEnabled=$stereoSubtitleModeEnabled")
                 if (generation != imageSubtitleDecoderGeneration || !stereoSubtitleModeEnabled || !isImageSubtitleTrackSelected()) {
