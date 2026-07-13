@@ -2662,14 +2662,20 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun updateImageSubtitleFrame(timePosSec: Double) {
         if (!stereoSubtitleModeEnabled || !isImageSubtitleTrackSelected() ||
             !imageSubtitleDecoderReady || imageSubtitleDecoderState != ImageSubtitleDecoderState.READY) {
-            Log.d(TAG, "LeiaImageSub: updateImageSubtitleFrame gate check failed stereoSubtitleModeEnabled=$stereoSubtitleModeEnabled imageSubtitleDecoderReady=$imageSubtitleDecoderReady decoderState=$imageSubtitleDecoderState")
             return
         }
-        val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
-        val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
+
+        // FIX: Use the video's native resolution instead of the screen dimensions.
+        // This ensures the subtitle coordinates perfectly match the video pixels,
+        // allowing the Leia SDK to composite and scale them uniformly.
+        val videoW = MPVLib.getPropertyInt("video-params/w") ?: 0
+        val videoH = MPVLib.getPropertyInt("video-params/h") ?: 0
+        
+        val width = if (videoW > 0) videoW else (if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels)
+        val height = if (videoH > 0) videoH else (if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels)
+
         val bmp = MPVLib.renderImageSubtitleAt(timePosSec, width, height)
         if (bmp == null) {
-            Log.d(TAG, "LeiaImageSub: renderImageSubtitleAt returned null at t=$timePosSec (${width}x$height) - likely no active event at this timestamp, or unchanged since last call")
             return
         }
         if (!loggedFirstImageSubtitleFrame) {
