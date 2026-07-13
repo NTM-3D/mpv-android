@@ -2138,8 +2138,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             playbackHasStarted = true
 
             // Detect 3D format for the new file; disable 3D if previous file had it
-            val path = MPVLib.getPropertyString("path") ?: ""
-            val newFormat = detectLeiaFormat(this, path)
+            val filename = MPVLib.getPropertyString("media-title") ?: MPVLib.getPropertyString("filename") ?: ""
+            val newFormat = detectLeiaFormat(this, filename)
             userForced3DOffForCurrentFile = false
             imageSubtitleDecoderFailedKey = null
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
