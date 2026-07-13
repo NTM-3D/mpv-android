@@ -365,17 +365,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         if (showMediaTitle)
             binding.controlsTitleGroup.visibility = View.VISIBLE
 
-        updateOrientation(true)
-
         // Parse the intent
         val filepath = parsePathFromIntent(intent)
         if (intent.action == Intent.ACTION_VIEW) {
             parseIntentExtras(intent.extras)
-        }
-
-        // FIX: Guess subtitles for HTTP URLs since mpv's sub-auto skips them
-        if (filepath != null) {
-            guessNetworkSubtitles(filepath)
         }
 
         if (filepath == null) {
@@ -470,7 +463,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             return
         }
     
-        // FIX: Reset and populate onloadCommands for the new file
+        // Reset and populate onloadCommands for the new file
         onloadCommands.clear()
         if (intent?.action == Intent.ACTION_VIEW) {
             parseIntentExtras(intent.extras)
@@ -2159,6 +2152,12 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 }
             }
 
+            updateOrientation(true)
+            // Guess subtitles for HTTP URLs since mpv's sub-auto skips them
+            if (filepath != null) {
+                guessNetworkSubtitles(filepath)
+            }
+
             //Log.d(debugTag, "Final filename passed to detectLeiaFormat: $resolvedFilename")
             val newFormat = detectLeiaFormat(resolvedFilename)
             userForced3DOffForCurrentFile = false
@@ -2719,17 +2718,30 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val lastDot = cleanFilename.lastIndexOf('.')
             val baseName = if (lastDot != -1) cleanFilename.substring(0, lastDot) else cleanFilename
 
-            // All standard subtitle extensions
-            val extensions = listOf("srt", "ass", "ssa", "vtt", "txt")
-
+            // All standard subtitle extensions (lowercase and uppercase for case-sensitive servers)
+            val extensions = listOf(
+                "srt", "ass", "ssa", "vtt", "txt"
+            )
+            
             for (ext in extensions) {
-                // 1. Exact match: filename.ext
                 val exactUrl = "$dirUrl$baseName.$ext$queryString"
                 onloadCommands.add(arrayOf("sub-add", exactUrl, "auto"))
-                
-                // 2. Wildcard match: filename.*.ext
-                val wildcardUrl = "$dirUrl$baseName.*.$ext$queryString"
-                onloadCommands.add(arrayOf("sub-add", wildcardUrl, "auto"))
+            }
+
+            // 2. Add the wildcard guesses. 
+            // (We MUST use a list because HTTP servers do not understand the '*' character 
+            // and will just return a 404 error for a file literally named "*.srt").
+            val wildcards = listOf(
+                "en", "eng", "es", "spa", "fr", "fre", "de", "ger", "it", "ita", "pt", "por", 
+                "ru", "rus", "zh", "chi", "jp", "jpn", "ko", "kor", "ar", "ara", "hi", "hin",
+				"sv", "se", "fi", "no", "forced", "hi", "sdh", "cc", "default"
+            )
+
+            for (ext in extensions) {
+                for (wildcard in wildcards) {
+                    val wildcardUrl = "$dirUrl$baseName.$wildcard.$ext$queryString"
+                    onloadCommands.add(arrayOf("sub-add", wildcardUrl, "auto"))
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to guess network subtitles: $e")
