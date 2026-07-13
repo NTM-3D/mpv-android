@@ -2172,22 +2172,24 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             currentLeiaFormat = newFormat
         }
 
-        if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART) {
-            if (!leiaEnabled) {
-                // Enable 3D only once mpv is actively rendering frames, and only when
-                // the filename indicates a known 3D format.
-                if (currentLeiaFormat != LeiaFormat.NONE && !userForced3DOffForCurrentFile) {
-                    eventUiHandler.post {
-                        apply3DMode(currentLeiaFormat)
-                        update3DButton()
-                        updateStereoSubtitleMode()
-                    }
+        if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART && !leiaEnabled) {
+            // Enable 3D only once mpv is actively rendering frames, and only when
+            // the filename indicates a known 3D format.
+            if (currentLeiaFormat != LeiaFormat.NONE && !userForced3DOffForCurrentFile) {
+                eventUiHandler.post {
+                    apply3DMode(currentLeiaFormat)
+                    update3DButton()
+                    updateStereoSubtitleMode()
                 }
             }
-            
-            // Guess network subtitles AFTER 3D is triggered so it doesn't block it
-            val currentPath = MPVLib.getPropertyString("path") ?: ""
-            guessNetworkSubtitles(currentPath)
+        }
+
+        if (eventId == MpvEvent.MPV_EVENT_FILE_LOADED) {
+            // Run in a background thread so HTTP timeouts don't block mpv's video decoding
+            Thread {
+                val currentPath = MPVLib.getPropertyString("path") ?: ""
+                guessNetworkSubtitles(currentPath)
+            }.start()
         }
 
         if (!activityIsForeground) return
