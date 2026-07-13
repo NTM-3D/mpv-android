@@ -118,6 +118,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var subtitleSize = 0
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
+    private var hasGuessedNetworkSubtitles = false
     private var subtitleBitmap: Bitmap? = null
     private var imageSubtitleDecoderReady = false
     private var imageSubtitleDecoderPath: String? = null
@@ -365,6 +366,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         if (showMediaTitle)
             binding.controlsTitleGroup.visibility = View.VISIBLE
 
+        updateOrientation(true)
+
         // Parse the intent
         val filepath = parsePathFromIntent(intent)
         if (intent.action == Intent.ACTION_VIEW) {
@@ -462,13 +465,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         if (filepath == null) {
             return
         }
-    
-        // Reset and populate onloadCommands for the new file
-        onloadCommands.clear()
-        if (intent?.action == Intent.ACTION_VIEW) {
-            parseIntentExtras(intent.extras)
-        }
-        guessNetworkSubtitles(filepath)
 
         if (!activityIsForeground && didResumeBackgroundPlayback) {
             if (this.newIntentReplace) {
@@ -2112,6 +2108,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             finishWithResult(if (playbackHasStarted) RESULT_OK else RESULT_CANCELED)
 
         if (eventId == MpvEvent.MPV_EVENT_START_FILE) {
+            hasGuessedNetworkSubtitles = false
+            
             val cmds = onloadCommands.toTypedArray()
             onloadCommands.clear()
             for (c in cmds)
@@ -2152,12 +2150,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 }
             }
 
-            updateOrientation(true)
-            // Guess subtitles for HTTP URLs since mpv's sub-auto skips them
-            if (filepath != null) {
-                guessNetworkSubtitles(filepath)
-            }
-
             //Log.d(debugTag, "Final filename passed to detectLeiaFormat: $resolvedFilename")
             val newFormat = detectLeiaFormat(resolvedFilename)
             userForced3DOffForCurrentFile = false
@@ -2180,16 +2172,22 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             currentLeiaFormat = newFormat
         }
 
-        if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART && !leiaEnabled) {
-            // Enable 3D only once mpv is actively rendering frames, and only when
-            // the filename indicates a known 3D format.
-            if (currentLeiaFormat != LeiaFormat.NONE && !userForced3DOffForCurrentFile) {
-                eventUiHandler.post {
-                    apply3DMode(currentLeiaFormat)
-                    update3DButton()
-                    updateStereoSubtitleMode()
+        if (eventId == MpvEvent.MPV_EVENT_PLAYBACK_RESTART) {
+            if (!leiaEnabled) {
+                // Enable 3D only once mpv is actively rendering frames, and only when
+                // the filename indicates a known 3D format.
+                if (currentLeiaFormat != LeiaFormat.NONE && !userForced3DOffForCurrentFile) {
+                    eventUiHandler.post {
+                        apply3DMode(currentLeiaFormat)
+                        update3DButton()
+                        updateStereoSubtitleMode()
+                    }
                 }
             }
+            
+            // Guess network subtitles AFTER 3D is triggered so it doesn't block it
+            val currentPath = MPVLib.getPropertyString("path") ?: ""
+            guessNetworkSubtitles(currentPath)
         }
 
         if (!activityIsForeground) return
@@ -2702,6 +2700,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun guessNetworkSubtitles(filepath: String) {
         // Only attempt this for HTTP streams
         if (!filepath.startsWith("http://")) return
+		
+		// Prevent running multiple times for the same file
+        if (hasGuessedNetworkSubtitles) return
+        hasGuessedNetworkSubtitles = true
 
         try {
             val lastSlash = filepath.lastIndexOf('/')
@@ -2718,14 +2720,14 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val lastDot = cleanFilename.lastIndexOf('.')
             val baseName = if (lastDot != -1) cleanFilename.substring(0, lastDot) else cleanFilename
 
-            // All standard subtitle extensions (lowercase and uppercase for case-sensitive servers)
+            // All standard subtitle extensions
             val extensions = listOf(
                 "srt", "ass", "ssa", "vtt", "txt"
             )
             
             for (ext in extensions) {
                 val exactUrl = "$dirUrl$baseName.$ext$queryString"
-                onloadCommands.add(arrayOf("sub-add", exactUrl, "auto"))
+                MPVLib.command(arrayOf("sub-add", exactUrl, "auto"))
             }
 
             // 2. Add the wildcard guesses. 
@@ -2740,7 +2742,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             for (ext in extensions) {
                 for (wildcard in wildcards) {
                     val wildcardUrl = "$dirUrl$baseName.$wildcard.$ext$queryString"
-                    onloadCommands.add(arrayOf("sub-add", wildcardUrl, "auto"))
+                    MPVLib.command(arrayOf("sub-add", wildcardUrl, "auto"))
                 }
             }
         } catch (e: Exception) {
