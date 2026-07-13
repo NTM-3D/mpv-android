@@ -2693,7 +2693,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
         val imageTrack = shouldEnableStereoSubs && isImageSubtitleTrackSelected()
         Log.d(TAG, "LeiaImageSub: updateStereoSubtitleMode sid=${player.sid} shouldEnableStereoSubs=$shouldEnableStereoSubs imageTrack=$imageTrack")
-        MPVLib.setPropertyBoolean("sub-visibility", !shouldEnableStereoSubs)
+        MPVLib.setPropertyBoolean("sub-visibility", shouldEnableStereoSubs)
         player.setStereoSubtitleEnabled(shouldEnableStereoSubs)
         if (!shouldEnableStereoSubs) {
             stopImageSubtitleDecoder(resetNative = true)
