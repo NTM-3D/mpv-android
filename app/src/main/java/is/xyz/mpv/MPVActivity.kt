@@ -373,6 +373,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             parseIntentExtras(intent.extras)
         }
 
+        // FIX: Guess subtitles for HTTP URLs since mpv's sub-auto skips them
+        if (filepath != null) {
+            guessNetworkSubtitles(filepath)
+        }
+
         if (filepath == null) {
             Log.e(TAG, "No file given, exiting")
             showToast(getString(R.string.error_no_file))
@@ -464,6 +469,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         if (filepath == null) {
             return
         }
+    
+        // FIX: Reset and populate onloadCommands for the new file
+        onloadCommands.clear()
+        if (intent?.action == Intent.ACTION_VIEW) {
+            parseIntentExtras(intent.extras)
+        }
+        guessNetworkSubtitles(filepath)
 
         if (!activityIsForeground && didResumeBackgroundPlayback) {
             if (this.newIntentReplace) {
@@ -2686,6 +2698,44 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         getDefaultSharedPreferences(applicationContext).edit()
             .putInt("subtitle_size_3d", subtitleSize)
             .apply()
+    }
+
+    private fun guessNetworkSubtitles(filepath: String) {
+        // Only attempt this for HTTP streams
+        if (!filepath.startsWith("http://")) return
+
+        try {
+            val lastSlash = filepath.lastIndexOf('/')
+            if (lastSlash == -1 || lastSlash == filepath.length - 1) return
+
+            val dirUrl = filepath.substring(0, lastSlash + 1)
+            val filename = filepath.substring(lastSlash + 1)
+            
+            // Strip query parameters if present (e.g., ?token=123)
+            val queryIndex = filename.indexOf('?')
+            val cleanFilename = if (queryIndex != -1) filename.substring(0, queryIndex) else filename
+            val queryString = if (queryIndex != -1) filename.substring(queryIndex) else ""
+
+            val lastDot = cleanFilename.lastIndexOf('.')
+            val baseName = if (lastDot != -1) cleanFilename.substring(0, lastDot) else cleanFilename
+
+            val extensions = listOf("srt", "ass", "ssa", "vtt")
+            val langs = listOf("", ".en", ".eng", ".es", ".spa", ".fr", ".fre", ".de", ".ger", ".it", ".ita", ".pt", ".por", ".ru", ".rus", ".zh", ".chi", ".jp", ".jpn", ".ko", ".kor", ".se", ".sv", ".fi")
+
+            val seenUrls = mutableSetOf<String>()
+            
+            for (ext in extensions) {
+                for (lang in langs) {
+                    val subUrl = dirUrl + baseName + lang + "." + ext + queryString
+                    if (seenUrls.add(subUrl)) {
+                        // "auto" flag tells mpv to load it but only select it if it matches slang preferences
+                        onloadCommands.add(arrayOf("sub-add", subUrl, "auto"))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to guess network subtitles: $e")
+        }
     }
 
     private fun updateStereoSubtitleMode() {
