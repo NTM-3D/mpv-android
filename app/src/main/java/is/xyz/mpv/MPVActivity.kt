@@ -68,9 +68,28 @@ typealias StateRestoreCallback = () -> Unit
 
 enum class LeiaFormat { NONE, HALF_SBS, HALF_TAB, FULL_SBS, FULL_TAB }
 
-fun detectLeiaFormat(filename: String): LeiaFormat {
-    val name = filename.lowercase()
-    val tokenBoundary = "[\\s._\\-\\[\\]\\(\\)]"
+fun detectLeiaFormat(context: Context?, filename: String): LeiaFormat {
+
+    val name = when {
+        filename.startsWith("content://") && context != null -> {
+            val uri = Uri.parse(filename)
+            val projection = arrayOf(OpenableColumns.DISPLAY_NAME)
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getString(cursor.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME))
+                        ?.lowercase() ?: filename.lowercase()
+                } else filename.lowercase()
+            }
+        }
+        else -> filename.substringAfterLast('/').lowercase()
+    }
+
+    val tokenBoundary = "[\\s._\\-\
+
+\[\\]
+
+\\(\\)]"
+
     fun hasToken(token: String): Boolean {
         val pattern = "(^|$tokenBoundary)${Regex.escape(token)}($tokenBoundary|$)"
         return Regex(pattern).containsMatchIn(name)
@@ -78,11 +97,11 @@ fun detectLeiaFormat(filename: String): LeiaFormat {
     fun hasAnyToken(tokens: Array<String>): Boolean = tokens.any { hasToken(it) }
 
     val halfSbsExplicit = hasAnyToken(arrayOf("hsbs", "half-sbs", "half_sbs", "sbs-half", "sbs_half", "half_2x1"))
-    val halfTabExplicit = hasAnyToken(arrayOf("htab", "half-tab", "half_tab", "tab-half", "tab_half", "half_1x2"))
+    val halfTabExplicit = hasAnyToken(arrayOf("htab", "half-tab", "half_tab", "tab-half", "tab_half", "half_1x2", "half-ou", "half_ou", "half-overunder"))
     val fullSbsExplicit = hasAnyToken(arrayOf("fsbs", "full-sbs", "full_sbs", "sbs-full", "sbs_full", "full_2x1"))
     val fullTabExplicit = hasAnyToken(arrayOf("ftab", "full-tab", "full_tab", "tab-full", "tab_full", "full_1x2", "full-ou", "full_ou", "full-overunder"))
 
-    val genericSbs = hasToken("sbs")
+    val genericSbs = hasAnyToken(arrayOf("3d", "sbs"))
     val genericTabOrOu = hasAnyToken(arrayOf("tab", "ou", "overunder", "over-under", "over_under", "topbottom", "top-bottom", "top_bottom", "tb"))
 
     val has2x1Fallback = name.contains("_2x1") && !name.contains("half_2x1")
