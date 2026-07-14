@@ -2374,6 +2374,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // actual video destination rect.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
         MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
+        val osdKeepAspect = when (format) {
+            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> true
+            else -> false
+        }
+        MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive) osdKeepAspect else false)
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
@@ -2945,7 +2950,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
             LeiaFormat.HALF_SBS -> {
                 //MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
-                MPVLib.setPropertyBoolean("osd-keepaspect", true)
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2954,7 +2958,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
             LeiaFormat.HALF_TAB -> {
                 //MPVLib.setOptionString("vf", "format:stereo-in=ab2l")
-                MPVLib.setPropertyBoolean("osd-keepaspect", false)
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2963,8 +2966,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
             LeiaFormat.FULL_SBS -> {
-                //MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
-                MPVLib.setPropertyBoolean("osd-keepaspect", true)
+                MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2973,7 +2975,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
             LeiaFormat.FULL_TAB -> {
                 //MPVLib.setOptionString("vf", "format:stereo-in=ab2l")
-                MPVLib.setPropertyBoolean("osd-keepaspect", false)
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
