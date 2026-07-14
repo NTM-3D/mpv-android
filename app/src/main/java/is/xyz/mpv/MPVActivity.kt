@@ -2935,7 +2935,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Disable3D()
             }
             LeiaFormat.HALF_SBS -> {
-                MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
+                //MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2943,7 +2943,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
             LeiaFormat.HALF_TAB -> {
-                //MPVLib.setOptionString("vf", "format:stereo-in=ab2l")
+                MPVLib.setOptionString("vf", "format:stereo-in=ab2l")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
