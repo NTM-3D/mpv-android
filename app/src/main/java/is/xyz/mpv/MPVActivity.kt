@@ -2374,7 +2374,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // actual video destination rect.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
         MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
-        MPVLib.setPropertyBoolean("osd-keepaspect", !stereoActive)
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
@@ -2946,6 +2945,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
             LeiaFormat.HALF_SBS -> {
                 //MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
+                MPVLib.setPropertyBoolean("osd-keepaspect", true)
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2954,6 +2954,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
             LeiaFormat.HALF_TAB -> {
                 //MPVLib.setOptionString("vf", "format:stereo-in=ab2l")
+                MPVLib.setPropertyBoolean("osd-keepaspect", false)
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2963,6 +2964,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
             LeiaFormat.FULL_SBS -> {
                 //MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
+                MPVLib.setPropertyBoolean("osd-keepaspect", true)
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2971,6 +2973,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             }
             LeiaFormat.FULL_TAB -> {
                 //MPVLib.setOptionString("vf", "format:stereo-in=ab2l")
+                MPVLib.setPropertyBoolean("osd-keepaspect", false)
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
