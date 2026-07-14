@@ -2757,7 +2757,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
         val imageTrack = shouldEnableStereoSubs && isImageSubtitleTrackSelected()
         Log.d(TAG, "LeiaImageSub: updateStereoSubtitleMode sid=${player.sid} shouldEnableStereoSubs=$shouldEnableStereoSubs imageTrack=$imageTrack")
-        MPVLib.setOptionString("vf", "format:stereo-in=sbsl")
         if (!shouldEnableStereoSubs) {
             MPVLib.setPropertyBoolean("sub-visibility", true)
             MPVLib.setPropertyBoolean("image-subs-video-resolution", false)
@@ -2929,12 +2928,14 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         Log.d("HALF_TAB_DEBUG", "apply3DMode called: format=$format")
         when (format) {
             LeiaFormat.NONE -> {
+                MPVLib.setOptionString("vf", "format:stereo-in=no")
                 userForced3DOffForCurrentFile = true
                 leiaEnabled = false
                 player.setMode(0)
                 Disable3D()
             }
             LeiaFormat.HALF_SBS -> {
+                MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2942,6 +2943,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
             LeiaFormat.HALF_TAB -> {
+                MPVLib.setOptionString("vf", "format:stereo-in=ab2l")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2950,6 +2952,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
             LeiaFormat.FULL_SBS -> {
+                MPVLib.setOptionString("vf", "format:stereo-in=setOnSeekBarChangeListener")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -2957,6 +2960,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
             LeiaFormat.FULL_TAB -> {
+                MPVLib.setOptionString("vf", "format:stereo-in=ab2l")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
