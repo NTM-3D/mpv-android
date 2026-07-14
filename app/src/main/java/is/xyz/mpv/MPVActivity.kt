@@ -2757,50 +2757,44 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
         val imageTrack = shouldEnableStereoSubs && isImageSubtitleTrackSelected()
         Log.d(TAG, "LeiaImageSub: updateStereoSubtitleMode sid=${player.sid} shouldEnableStereoSubs=$shouldEnableStereoSubs imageTrack=$imageTrack")
-        MPVLib.setPropertyBoolean("sub-visibility", !shouldEnableStereoSubs)
-        player.setStereoSubtitleEnabled(shouldEnableStereoSubs)
+
         if (!shouldEnableStereoSubs) {
+            MPVLib.setPropertyBoolean("sub-visibility", true)
+            MPVLib.setPropertyString("video-aspect-override", "no")
+            player.setStereoSubtitleEnabled(false)
             stopImageSubtitleDecoder(resetNative = true)
             return
         }
+
         if (imageTrack) {
+            // Pre-authored stereo PGS/VobSub/etc already has its L/R content
+            // positioned to match the packed SBS/TAB frame, the same way the
+            // video itself is packed — so mpv's own native subtitle rendering
+            // already produces a correct stereo result here, same as if it
+            // were part of the video. No need for the custom bitmap
+            // decode/duplicate pipeline built for text subtitles, which only
+            // makes sense for content that ISN'T already stereo-aware.
+            //
+            // mpv always scales image-based subtitles (PGS/VobSub/DVB) as if
+            // they were authored for a 16:9 canvas, stretching them to match
+            // whatever it thinks the video's aspect ratio is (this is a
+            // documented mpv behavior, not specific to this app — see
+            // https://github.com/mpv-player/mpv/issues/14276). Our packed
+            // SBS/TAB frame isn't 16:9, so without this override the subtitle
+            // gets stretched horizontally, worse the further right you go —
+            // exactly the reported misalignment. Force it back to 16:9 so
+            // mpv scales the subtitle correctly regardless of the packed
+            // frame's actual raw aspect ratio.
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            val selectedTrack = getSelectedSubtitleTrack()
-            val ffIndex = selectedTrack?.ffIndex
-            val subtitleOrder = selectedTrack?.subtitleOrder
-            val codecHint = selectedTrack?.codec
-            val candidates = decoderPathCandidates()
-            Log.d(TAG, "LeiaImageSub: imageTrack branch codec=$codecHint ffIndex=$ffIndex subtitleOrder=$subtitleOrder candidates=$candidates")
-            if (ffIndex == null || subtitleOrder == null || candidates.isEmpty()) {
-                Log.w(TAG, "LeiaImageSub: bailing out, missing ffIndex/subtitleOrder/candidates")
-                stopImageSubtitleDecoder(resetNative = true)
-                MPVLib.setPropertyBoolean("sub-visibility", true)
-                player.setStereoSubtitleEnabled(false)
-                return
-            }
-            val requestKey = "${candidates.joinToString("|")}#$ffIndex#$subtitleOrder#${codecHint ?: ""}"
-            val needInit = !imageSubtitleDecoderReady ||
-                !candidates.contains(imageSubtitleDecoderPath) ||
-                imageSubtitleDecoderFfIndex != ffIndex
-            Log.d(TAG, "LeiaImageSub: needInit=$needInit decoderState=$imageSubtitleDecoderState decoderReady=$imageSubtitleDecoderReady decoderPath=$imageSubtitleDecoderPath")
-            if (needInit && imageSubtitleDecoderState != ImageSubtitleDecoderState.INITIALIZING) {
-                if (imageSubtitleDecoderState == ImageSubtitleDecoderState.FAILED &&
-                    imageSubtitleDecoderFailedKey == requestKey) {
-                    Log.w(TAG, "LeiaImageSub: previously failed for this exact request, not retrying")
-                    persistSubtitleDepth()
-                    return
-                }
-                stopImageSubtitleDecoder(resetNative = true)
-                Log.d(TAG, "LeiaImageSub: starting decoder init")
-                startImageSubtitleDecoderInit(candidates, ffIndex, subtitleOrder, codecHint)
-            }
-            applySubtitleDepth(subtitleDepth)
-            if (imageSubtitleDecoderState == ImageSubtitleDecoderState.READY) {
-                updateImageSubtitleFrame(player.timePos ?: 0.0)
-            }
-            persistSubtitleDepth()
+            MPVLib.setPropertyString("video-aspect-override", "16:9")
+            player.setStereoSubtitleEnabled(false)
+            stopImageSubtitleDecoder(resetNative = true)
             return
         }
+
+        MPVLib.setPropertyBoolean("sub-visibility", false)
+        MPVLib.setPropertyString("video-aspect-override", "no")
+        player.setStereoSubtitleEnabled(true)
         stopImageSubtitleDecoder(resetNative = true)
         applySubtitleDepth(subtitleDepth)
         updateStereoSubtitleText(currentSubText)
