@@ -2786,7 +2786,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // mpv scales the subtitle correctly regardless of the packed
             // frame's actual raw aspect ratio.
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.setPropertyString("video-aspect-override", "32:9")
+            MPVLib.setPropertyString("video-aspect-override", "16:10")
             player.setStereoSubtitleEnabled(false)
             stopImageSubtitleDecoder(resetNative = true)
             return
