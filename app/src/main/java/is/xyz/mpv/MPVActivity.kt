@@ -2760,7 +2760,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         if (!shouldEnableStereoSubs) {
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.setPropertyString("video-aspect-override", "no")
+            MPVLib.setPropertyBoolean("image-subs-video-resolution", false)
             player.setStereoSubtitleEnabled(false)
             stopImageSubtitleDecoder(resetNative = true)
             return
@@ -2775,25 +2775,27 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // decode/duplicate pipeline built for text subtitles, which only
             // makes sense for content that ISN'T already stereo-aware.
             //
-            // mpv always scales image-based subtitles (PGS/VobSub/DVB) as if
-            // they were authored for a 16:9 canvas, stretching them to match
-            // whatever it thinks the video's aspect ratio is (this is a
-            // documented mpv behavior, not specific to this app — see
-            // https://github.com/mpv-player/mpv/issues/14276). Our packed
-            // SBS/TAB frame isn't 16:9, so without this override the subtitle
-            // gets stretched horizontally, worse the further right you go —
-            // exactly the reported misalignment. Force it back to 16:9 so
-            // mpv scales the subtitle correctly regardless of the packed
-            // frame's actual raw aspect ratio.
+            // By default mpv scales an image subtitle against its OWN
+            // declared canvas size (from the subtitle codec), not the
+            // video's actual dimensions. For a video that's been repacked
+            // into Half-SBS/TAB while keeping a subtitle track authored for
+            // the original (differently shaped) source, that declared canvas
+            // no longer matches the real packed frame, causing a scale error
+            // that grows with distance from the origin — exactly the
+            // reported "right side much more offset than left" symptom.
+            // --image-subs-video-resolution scales against the actual video
+            // dimensions instead, which mpv's own docs describe as the fix
+            // for precisely this "video was transcoded/repacked, subtitle
+            // canvas is now stale" scenario.
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.setPropertyString("video-aspect-override", "16:10")
+            MPVLib.setPropertyBoolean("image-subs-video-resolution", true)
             player.setStereoSubtitleEnabled(false)
             stopImageSubtitleDecoder(resetNative = true)
             return
         }
 
         MPVLib.setPropertyBoolean("sub-visibility", false)
-        MPVLib.setPropertyString("video-aspect-override", "no")
+        MPVLib.setPropertyBoolean("image-subs-video-resolution", false)
         player.setStereoSubtitleEnabled(true)
         stopImageSubtitleDecoder(resetNative = true)
         applySubtitleDepth(subtitleDepth)
