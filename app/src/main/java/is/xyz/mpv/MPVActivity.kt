@@ -2344,6 +2344,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     fun Disable3D() {
         sdk.enableBacklight(false)
         sdk.enableFaceTracking(false)
+        MPVLib.setOptionString("vf", "format:stereo-in=no")
     }
 
     private fun update3DButton() {
@@ -2926,14 +2927,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         Log.d("HALF_TAB_DEBUG", "apply3DMode called: format=$format")
         when (format) {
             LeiaFormat.NONE -> {
-                MPVLib.setOptionString("vf", "format:stereo-in=no")
                 userForced3DOffForCurrentFile = true
                 leiaEnabled = false
                 player.setMode(0)
                 Disable3D()
             }
             LeiaFormat.HALF_SBS -> {
-                //MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
+                MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
