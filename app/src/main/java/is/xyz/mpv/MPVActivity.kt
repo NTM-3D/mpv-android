@@ -2361,8 +2361,20 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // the exact halfway point regardless of the buffer's own aspect ratio. The real
         // 16:9-in-16:10 letterboxing for the final image is applied once, after eye
         // splitting, in LeiaTextureRenderer.
+        //
+        // But mpv computes native subtitle/OSD positioning from the exact same
+        // aspect-driven letterbox math as the video's own display rect, gated
+        // by keepaspect — so keepaspect=no also zeroes out the margins mpv
+        // uses to scale/position native image subtitles (PGS/VobSub/etc),
+        // causing them to stretch to fill the whole edge-to-edge buffer
+        // instead of being positioned correctly. osd-keepaspect (a small
+        // vendored mpv patch, see buildscripts/patches/mpv-osd-keepaspect.patch)
+        // decouples the two: it computes what those letterbox margins would
+        // have been, for subtitle positioning only, without touching the
+        // actual video destination rect.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
-        //MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
+        MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
+        MPVLib.setPropertyBoolean("osd-keepaspect", stereoActive)
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
