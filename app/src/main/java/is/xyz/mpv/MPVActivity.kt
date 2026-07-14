@@ -2952,7 +2952,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
             LeiaFormat.FULL_SBS -> {
-                MPVLib.setOptionString("vf", "format:stereo-in=setOnSeekBarChangeListener")
+                MPVLib.setOptionString("vf", "format:stereo-in=sbs2l")
+                MPVLib.setPropertyDouble("sub-scale", 0.5)
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
