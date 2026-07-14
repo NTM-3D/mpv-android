@@ -2374,7 +2374,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // actual video destination rect.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
         MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
-        MPVLib.setPropertyBoolean("osd-keepaspect", true)
+        MPVLib.setPropertyBoolean("osd-keepaspect", !stereoActive)
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
