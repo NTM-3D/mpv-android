@@ -2968,7 +2968,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
         }
-        applyLeiaDisplayProperties(format, leiaEnabled)
+        //applyLeiaDisplayProperties(format, leiaEnabled)
         updateLeiaContentAspect()
         updateOrientation()
         mPrevDesiredBacklightModeState = leiaEnabled
