@@ -2767,30 +2767,12 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         if (imageTrack) {
-            // Pre-authored stereo PGS/VobSub/etc already has its L/R content
-            // positioned to match the packed SBS/TAB frame, the same way the
-            // video itself is packed — so mpv's own native subtitle rendering
-            // already produces a correct stereo result here, same as if it
-            // were part of the video. No need for the custom bitmap
-            // decode/duplicate pipeline built for text subtitles, which only
-            // makes sense for content that ISN'T already stereo-aware.
-            //
-            // By default mpv scales an image subtitle against its OWN
-            // declared canvas size (from the subtitle codec), not the
-            // video's actual dimensions. For a video that's been repacked
-            // into Half-SBS/TAB while keeping a subtitle track authored for
-            // the original (differently shaped) source, that declared canvas
-            // no longer matches the real packed frame, causing a scale error
-            // that grows with distance from the origin — exactly the
-            // reported "right side much more offset than left" symptom.
-            // --image-subs-video-resolution scales against the actual video
-            // dimensions instead, which mpv's own docs describe as the fix
-            // for precisely this "video was transcoded/repacked, subtitle
-            // canvas is now stale" scenario.
+            Log.d(TAG, "LeiaImageSub: imageTrack code")
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.setPropertyBoolean("image-subs-video-resolution", true)
+            MPVLib.setPropertyBoolean("stretch-image-subs-to-screen", true)
+            //MPVLib.setPropertyBoolean("image-subs-video-resolution", true)
             player.setStereoSubtitleEnabled(false)
-            stopImageSubtitleDecoder(resetNative = true)
+            //stopImageSubtitleDecoder(resetNative = true)
             return
         }
 
