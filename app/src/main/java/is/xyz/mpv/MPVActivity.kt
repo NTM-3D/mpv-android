@@ -2759,7 +2759,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         Log.d(TAG, "LeiaImageSub: updateStereoSubtitleMode sid=${player.sid} shouldEnableStereoSubs=$shouldEnableStereoSubs imageTrack=$imageTrack")
         if (!shouldEnableStereoSubs) {
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.setPropertyBoolean("image-subs-video-resolution", false)
             player.setStereoSubtitleEnabled(false)
             stopImageSubtitleDecoder(resetNative = true)
             return
@@ -2772,8 +2771,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             return
         }
 
-        MPVLib.setPropertyBoolean("sub-visibility", true)
-        MPVLib.setPropertyBoolean("image-subs-video-resolution", false)
+        MPVLib.setPropertyBoolean("sub-visibility", false)
         player.setStereoSubtitleEnabled(true)
         stopImageSubtitleDecoder(resetNative = true)
         applySubtitleDepth(subtitleDepth)
