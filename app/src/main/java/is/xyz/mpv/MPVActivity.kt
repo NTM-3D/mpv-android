@@ -2362,7 +2362,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // 16:9-in-16:10 letterboxing for the final image is applied once, after eye
         // splitting, in LeiaTextureRenderer.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
-        MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
+        //MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
@@ -2968,7 +2968,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
         }
-        //applyLeiaDisplayProperties(format, leiaEnabled)
+        applyLeiaDisplayProperties(format, leiaEnabled)
         updateLeiaContentAspect()
         updateOrientation()
         mPrevDesiredBacklightModeState = leiaEnabled
