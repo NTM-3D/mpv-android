@@ -2758,7 +2758,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         return when (currentLeiaFormat) {
             LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> "sbs2l"
             LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "ab2l"
-            LeiaFormat.NONE -> "none"
+            LeiaFormat.NONE -> "no"
         }
     }
 
