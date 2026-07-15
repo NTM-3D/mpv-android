@@ -1,0 +1,71 @@
+diff --git a/options/options.c b/options/options.c
+index bab7e32..106834e 100644
+--- a/options/options.c
++++ b/options/options.c
+@@ -182,6 +182,7 @@ static const m_option_t mp_vo_opt_list[] = {
+         M_RANGE(0, 32)},
+     {"fs-screen-name", OPT_STRING(fsscreen_name)},
+     {"keepaspect", OPT_BOOL(keepaspect)},
++    {"osd-keepaspect", OPT_BOOL(osd_keepaspect)},
+     {"keepaspect-window", OPT_BOOL(keepaspect_window)},
+     {"hidpi-window-scale", OPT_BOOL(hidpi_window_scale)},
+     {"native-fs", OPT_BOOL(native_fs)},
+@@ -273,6 +274,7 @@ const struct m_sub_options vo_sub_opts = {
+         .scale_y = 1.0f,
+         .auto_window_resize = true,
+         .keepaspect = true,
++        .osd_keepaspect = false,
+         .keepaspect_window = true,
+         .native_fs = true,
+         .taskbar_progress = true,
+diff --git a/options/options.h b/options/options.h
+index d7b9542..f590cff 100644
+--- a/options/options.h
++++ b/options/options.h
+@@ -63,6 +63,7 @@ typedef struct mp_vo_opts {
+     bool auto_window_resize;
+     bool recenter;
+     bool keepaspect;
++    bool osd_keepaspect;
+     bool keepaspect_window;
+     bool hidpi_window_scale;
+     bool native_fs;
+diff --git a/video/out/aspect.c b/video/out/aspect.c
+index 55c5950..29aeb42 100644
+--- a/video/out/aspect.c
++++ b/video/out/aspect.c
+@@ -169,21 +169,31 @@ void mp_get_src_dst_rects(struct mp_log *log, struct mp_vo_opts *opts,
+         .display_par = monitor_par,
+     };
+ 
+-    if (opts->keepaspect) {
++    if (opts->keepaspect || opts->osd_keepaspect) {
+         int scaled_width, scaled_height;
+         aspect_calc_panscan(opts, src_w, src_h, src_dw, src_dh, opts->unscaled,
+                             vid_window_w, vid_window_h, monitor_par,
+                             &scaled_width, &scaled_height);
++        // When keepaspect is off but osd_keepaspect is on, we still want to
++        // know what the letterbox margins (osd.ml/mr/mt/mb) would have been
++        // for correct subtitle/OSD positioning, without actually letterboxing
++        // the video itself — so compute into scratch src/dst rects and only
++        // keep the osd margin output, leaving the real src/dst untouched.
++        struct mp_rect tmp_src = src, tmp_dst = dst;
+         src_dst_split_scaling(src_w, vid_window_w, scaled_width,
+                               opts->zoom, opts->align_x, opts->pan_x, opts->scale_x,
+                               opts->recenter,
+-                              &src.x0, &src.x1, &dst.x0, &dst.x1,
++                              &tmp_src.x0, &tmp_src.x1, &tmp_dst.x0, &tmp_dst.x1,
+                               &osd.ml, &osd.mr);
+         src_dst_split_scaling(src_h, vid_window_h, scaled_height,
+                               opts->zoom, opts->align_y, opts->pan_y, opts->scale_y,
+                               opts->recenter,
+-                              &src.y0, &src.y1, &dst.y0, &dst.y1,
++                              &tmp_src.y0, &tmp_src.y1, &tmp_dst.y0, &tmp_dst.y1,
+                               &osd.mt, &osd.mb);
++        if (opts->keepaspect) {
++            src = tmp_src;
++            dst = tmp_dst;
++        }
+     }
+ 
+     dst.x0 += margin_x[0];

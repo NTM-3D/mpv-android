@@ -19,10 +19,12 @@ This fork is based on:
   - Half TAB
   - Full SBS
   - Full TAB
-- Automatic 3D format detection from filenames
-- Manual 3D mode selection
-- Swap-eyes control
-- Adjustable 3D subtitle depth, position and size
+- Automatic 3D format detection from filenames.
+- Manual 3D mode selection and swap-eyes control.
+- Advanced 3D subtitle support for both text and image-based subtitles.
+- Per-file 3D settings memory: Image subtitle position, scale, X/Y stretch, and swap-eyes state are saved individually for each file.
+- Network subtitle auto-guessing: Automatically attempts to load external subtitles, when opening from SMB shares via file explorers (e.g., CX File Explorer), based on the media filename.
+- Image file playback: Open images directly from file explorers (e.g., CX File Explorer).
 
 ## 3D format detection
 
@@ -44,24 +46,29 @@ The player recognizes these filename markers:
 
 If no format is detected, the player defaults to Half SBS when 3D is enabled manually.
 
-## 3D subtitles
+## 3D Subtitles
 
-- Text subtitles are rendered as stereo subtitles in 3D mode.
-- Image subtitles such as PGS, DVD, DVB, VobSub, and XSub are not supported in 3D as of now.
+The player provides advanced controls for subtitles in 3D mode via the 3D settings dialog:
+- Text Subtitles: Rendered as custom stereo bitmaps with adjustable depth, position, and overall scale.
+- Image Subtitles (PGS, VobSub, DVD, etc.): 
+  - Pre-authored 3D: If the subtitle already contains stereo pairs, it is rendered natively with correct positioning.
+  - Mono Duplication: If the subtitle is mono, it can be automatically duplicated into both eyes to match the current SBS/TAB packing.
+  - Independent Scaling: Dedicated X and Y scale sliders to correct aspect ratio stretching caused by 3D packing (e.g., 0.5x on the squeezed axis).
 
-## Building
+## Network Subtitle Guessing
 
-Use the project build script:
+When playing media from SMB shares via file explorers (e.g., CX File Explorer), the player will automatically attempt to load external subtitles from the same directory. It checks for:
+1. Exact name matches: `movie.srt`, `movie.ass`, `movie.vtt`, etc.
+2. Language matches: `movie.en.srt`, `movie.eng.srt`, `movie.forced.srt`, `movie.sdh.srt`, etc.
 
-```sh
-cd buildscripts
-./buildall.sh
-```
+| Format | Auto-detected names |
+| --- | --- |
+| Extensions | `srt`, `ass`, `ssa`, `txt` |
+| Wildcards | `en`, `eng`, `es`, `spa`, `fr`, `fre`, `de`, `ger`, `it`, `ita`, `pt`, `por`, `ru`, `rus`, `zh`, `chi`, `jp`, `jpn`, `ko`, `kor`, `ar`, `ara`, `hi`, `hin`, `sv`, `se`, `fi`, `no`, `dk`, `forced`, `sdh`, `cc`, `default` |
 
-For a clean build:
+## Image File Playback
 
-```sh
-./buildall.sh --clean
-```
+You can now open image files (`.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`, `.gif`) directly from Android file explorers. If the image filename contains 3D markers (e.g., `photo_hsbs.jpg`), it will automatically render in the correct 3D mode, just like a video file.
 
-See [buildscripts/README.md](buildscripts/README.md) for more details.
+---
+*Note: This fork includes custom `mpv` patches (`osd-keepaspect` and `image-subs-scale-x/y`) to ensure perfect subtitle positioning and independent axis scaling in 3D modes.*

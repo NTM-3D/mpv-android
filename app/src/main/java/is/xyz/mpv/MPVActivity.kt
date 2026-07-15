@@ -113,11 +113,19 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var leiaEnabled = false
     private var loggedFirstImageSubtitleFrame = false
     private var currentLeiaFormat = LeiaFormat.NONE
+    private var swapEyes = false
     private var subtitleDepth = 0
     private var subtitlePosition = 0
     private var subtitleSize = 0
+    private var imageSubtitle3D = true
+    private var imageSubtitleScale = 0
+    private var imageSubtitlePosition = 100
+    private var imageSubsScaleX = 10
+    private var imageSubsScaleY = 10
+    private var currentFilePath = ""
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
+    private var hasGuessedNetworkSubtitles = false
     private var subtitleBitmap: Bitmap? = null
     private var imageSubtitleDecoderReady = false
     private var imageSubtitleDecoderPath: String? = null
@@ -2107,6 +2115,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             finishWithResult(if (playbackHasStarted) RESULT_OK else RESULT_CANCELED)
 
         if (eventId == MpvEvent.MPV_EVENT_START_FILE) {
+            hasGuessedNetworkSubtitles = false
+            
             val cmds = onloadCommands.toTypedArray()
             onloadCommands.clear()
             for (c in cmds)
@@ -2149,6 +2159,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
             //Log.d(debugTag, "Final filename passed to detectLeiaFormat: $resolvedFilename")
             val newFormat = detectLeiaFormat(resolvedFilename)
+            loadImageSubtitleSettingsForFile(path, newFormat)
             userForced3DOffForCurrentFile = false
             imageSubtitleDecoderFailedKey = null
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
@@ -2179,6 +2190,14 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                     updateStereoSubtitleMode()
                 }
             }
+        }
+
+        if (eventId == MpvEvent.MPV_EVENT_FILE_LOADED) {
+            // Run in a background thread so HTTP timeouts don't block mpv's video decoding
+            Thread {
+                val currentPath = MPVLib.getPropertyString("path") ?: ""
+                guessNetworkSubtitles(currentPath)
+            }.start()
         }
 
         if (!activityIsForeground) return
@@ -2315,6 +2334,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         private const val STREAM_TYPE = AudioManager.STREAM_MUSIC
         // precision used by seekbar (1/s)
         private const val SEEK_BAR_PRECISION = 2
+        // SharedPreferences file used to save image subtitle settings per opened file
+        private const val IMAGE_SUBTITLE_PER_FILE_PREFS = "image_subtitle_per_file"
     }
 
     private fun InitLeia(context: Context) {
@@ -2349,8 +2370,37 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // the exact halfway point regardless of the buffer's own aspect ratio. The real
         // 16:9-in-16:10 letterboxing for the final image is applied once, after eye
         // splitting, in LeiaTextureRenderer.
+        //
+        // But mpv computes native subtitle/OSD positioning from the exact same
+        // aspect-driven letterbox math as the video's own display rect, gated
+        // by keepaspect — so keepaspect=no also zeroes out the margins mpv
+        // uses to scale/position native image subtitles (PGS/VobSub/etc),
+        // causing them to stretch to fill the whole edge-to-edge buffer
+        // instead of being positioned correctly. osd-keepaspect (a small
+        // vendored mpv patch, see buildscripts/patches/mpv-osd-keepaspect.patch)
+        // decouples the two: it computes what those letterbox margins would
+        // have been, for subtitle positioning only, without touching the
+        // actual video destination rect.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
         MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
+
+        // Only SBS needs this — TAB's subtitle alignment breaks if it's on.
+        val osdKeepAspect = when (format) {
+            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> true
+            else -> false
+        }
+        MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive && imageSubtitle3D) osdKeepAspect else false)
+
+        // The imageSubsScaleX/Y sliders directly hold the value applied to
+        // image-subs-scale-x/y (stored in tenths, e.g. 5 = 0.5x), applied
+        // whenever stereo is active regardless of imageSubtitle3D. A file
+        // with no saved slider value defaults to the per-format auto-correct
+        // value (see defaultImageSubsScaleXTenths/YTenths).
+        val scaleX = imageSubsScaleX / 10.0
+        val scaleY = imageSubsScaleY / 10.0
+        MPVLib.setOptionString("image-subs-scale-x", if (stereoActive) scaleX.toString() else "1.0")
+        MPVLib.setOptionString("image-subs-scale-y", if (stereoActive) scaleY.toString() else "1.0")
+
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
@@ -2688,54 +2738,246 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             .apply()
     }
 
+    // Image subtitle settings are saved per opened file (like the last playback
+    // position), rather than as a single global default, so each file remembers
+    // its own values. A new/never-seen file falls back to the hardcoded defaults
+    // below - for the two stretch sliders, that default is the same per-format
+    // auto-correct value mpv previously computed on its own (0.5x for the axis
+    // that's squeezed by SBS/TAB packing, 1.0x otherwise).
+    private fun imageSubtitlePerFileKey(path: String): String {
+        val digest = java.security.MessageDigest.getInstance("MD5").digest(path.toByteArray())
+        return digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }
+
+    private fun defaultImageSubsScaleXTenths(format: LeiaFormat): Int = when (format) {
+        LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> 5
+        else -> 10
+    }
+
+    private fun defaultImageSubsScaleYTenths(format: LeiaFormat): Int = when (format) {
+        LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> 5
+        LeiaFormat.HALF_SBS -> 15
+        else -> 10
+    }
+
+    private fun loadImageSubtitleSettingsForFile(path: String, format: LeiaFormat) {
+        currentFilePath = path
+        if (path.isEmpty()) return
+        val prefs = getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE)
+        val key = imageSubtitlePerFileKey(path)
+        imageSubtitle3D = prefs.getBoolean("${key}_3d", false)
+        imageSubtitleScale = prefs.getInt("${key}_scale", 0).coerceIn(-15, 15)
+        imageSubtitlePosition = prefs.getInt("${key}_position", 100).coerceIn(50, 150)
+        imageSubsScaleX = prefs.getInt("${key}_scale_x", defaultImageSubsScaleXTenths(format)).coerceIn(1, 30)
+        imageSubsScaleY = prefs.getInt("${key}_scale_y", defaultImageSubsScaleYTenths(format)).coerceIn(1, 30)
+        
+        // Load and apply swap eyes
+        swapEyes = prefs.getBoolean("${key}_swap_eyes", false)
+        player.setSwapImages(swapEyes)
+    }
+
+    private fun persistImageSubtitle3D() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putBoolean("${imageSubtitlePerFileKey(currentFilePath)}_3d", imageSubtitle3D)
+            .apply()
+    }
+
+    private fun persistImageSubtitleScale() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putInt("${imageSubtitlePerFileKey(currentFilePath)}_scale", imageSubtitleScale)
+            .apply()
+    }
+
+    private fun persistImageSubtitlePosition() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putInt("${imageSubtitlePerFileKey(currentFilePath)}_position", imageSubtitlePosition)
+            .apply()
+    }
+
+    private fun persistImageSubsScaleX() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putInt("${imageSubtitlePerFileKey(currentFilePath)}_scale_x", imageSubsScaleX)
+            .apply()
+    }
+
+    private fun persistImageSubsScaleY() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putInt("${imageSubtitlePerFileKey(currentFilePath)}_scale_y", imageSubsScaleY)
+            .apply()
+    }
+
+    private fun persistImageSubtitleSwapEyes() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+        .putBoolean("${imageSubtitlePerFileKey(currentFilePath)}_swap_eyes", swapEyes)
+        .apply()
+    }
+
+    // Which mpv vf=format:stereo-in=<x> value matches the current 3D packing,
+    // for mono image subtitles that need to be duplicated into both eyes.
+    private fun currentStereoInFilterValue(): String {
+        return when (currentLeiaFormat) {
+            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> "sbs2l"
+            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "ab2l"
+            LeiaFormat.NONE -> "no"
+        }
+    }
+
+    // Pre-authored stereo image subtitles already contain both eyes and must
+    // not be duplicated again (stereo-in=none). Mono ones need duplicating
+    // to match the current SBS/TAB packing, same as apply3DMode() does for
+    // the video itself.
+    //
+    // Uses the "vf set" runtime command rather than setOptionString: the
+    // latter doesn't reliably replace an already-active filter chain during
+    // playback (the previous sbs2l/ab2l filter stayed active even after
+    // switching back to stereo-in=none), whereas "vf set" is mpv's
+    // documented mechanism for atomically replacing the whole filter chain.
+    private fun applyImageSubtitleStereoMode() {
+        val stereoIn = if (imageSubtitle3D || !leiaEnabled) "no" else currentStereoInFilterValue()
+        MPVLib.setOptionString("vf", "format:stereo-in=$stereoIn")
+    }
+
+    private fun mapImageSubtitleScale(slider: Int): Double {
+        val clamped = slider.coerceIn(-15, 15)
+        // Piecewise linear mapping: -15 -> 0.1, 0 -> 1.0, 15 -> 3.0
+        return if (clamped <= 0) {
+            0.1 + (clamped + 15) / 15.0 * 0.9
+        } else {
+            1.0 + clamped / 15.0 * 2.0
+        }
+    }
+
+    private fun applyImageSubtitleScale(scale: Int) {
+        MPVLib.setPropertyDouble("sub-scale", mapImageSubtitleScale(scale))
+    }
+
+    private fun applyImageSubtitlePosition(position: Int) {
+        MPVLib.setPropertyInt("sub-pos", position.coerceIn(50, 150))
+    }
+
+    private fun guessNetworkSubtitles(filepath: String) {
+        if (!filepath.startsWith("http://")) return
+        if (hasGuessedNetworkSubtitles) return
+        hasGuessedNetworkSubtitles = true
+
+        try {
+            val lastSlash = filepath.lastIndexOf('/')
+            if (lastSlash == -1 || lastSlash == filepath.length - 1) return
+
+            val dirUrl = filepath.substring(0, lastSlash + 1)
+            val filename = filepath.substring(lastSlash + 1)
+            
+            val queryIndex = filename.indexOf('?')
+            val cleanFilename = if (queryIndex != -1) filename.substring(0, queryIndex) else filename
+            val queryString = if (queryIndex != -1) filename.substring(queryIndex) else ""
+
+            val lastDot = cleanFilename.lastIndexOf('.')
+            val baseName = if (lastDot != -1) cleanFilename.substring(0, lastDot) else cleanFilename
+
+            val extensions = listOf("srt", "ass", "ssa", "txt")
+            val wildcards = listOf(
+                "en", "eng", "es", "spa", "fr", "fre", "de", "ger", "it", "ita", "pt", "por", 
+                "ru", "rus", "zh", "chi", "jp", "jpn", "ko", "kor", "ar", "ara", "hi", "hin",
+                "sv", "se", "fi", "no", "dk", "forced", "sdh", "cc", "default"
+            )
+
+            val candidates = mutableListOf<String>()
+            
+            // 1. Exact matches first (highest probability of success)
+            for (ext in extensions) {
+                candidates.add("$dirUrl$baseName.$ext$queryString")
+            }
+            
+            // 2. Wildcard matches
+            for (ext in extensions) {
+                for (wildcard in wildcards) {
+                    candidates.add("$dirUrl$baseName.$wildcard.$ext$queryString")
+                }
+            }
+
+            // 3. Probe each candidate; only add to MPV if the server confirms it exists
+            for (url in candidates) {
+                if (isSubtitleUrlValid(url)) {
+                    Log.d(TAG, "guessNetworkSubtitles: Found valid subtitle: $url")
+                    MPVLib.command(arrayOf("sub-add", url))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "guessNetworkSubtitles: Failed to guess network subtitles: $e")
+        }
+    }
+
+    private fun isSubtitleUrlValid(url: String): Boolean {
+        return try {
+            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "GET"   
+            connection.connectTimeout = 300 // 300ms is very short, ideal for localhost
+            connection.readTimeout = 300            
+            var code = connection.responseCode
+            connection.disconnect()
+
+            //Log.d(TAG, "guessNetworkSubtitles: Code: $code URL: $url")
+
+            // 200 OK or 206 Partial Content means the file exists
+            code == 200 || code == 206
+        } catch (e: Exception) {
+            // 404, 403, timeouts, or any network errors will land here and safely return false
+            false
+        }
+    }
+
     private fun updateStereoSubtitleMode() {
         val shouldEnableStereoSubs = isSbs3DActive() && player.sid != -1
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
         val imageTrack = shouldEnableStereoSubs && isImageSubtitleTrackSelected()
         Log.d(TAG, "LeiaImageSub: updateStereoSubtitleMode sid=${player.sid} shouldEnableStereoSubs=$shouldEnableStereoSubs imageTrack=$imageTrack")
-        MPVLib.setPropertyBoolean("sub-visibility", !shouldEnableStereoSubs)
-        player.setStereoSubtitleEnabled(shouldEnableStereoSubs)
+        applyImageSubtitleStereoMode()
+
         if (!shouldEnableStereoSubs) {
+            MPVLib.setPropertyBoolean("sub-visibility", true)
+            MPVLib.setPropertyDouble("sub-scale", 1.0)
+            MPVLib.setPropertyInt("sub-pos", 100)
+            player.setStereoSubtitleEnabled(false)
             stopImageSubtitleDecoder(resetNative = true)
             return
         }
+
         if (imageTrack) {
-            val selectedTrack = getSelectedSubtitleTrack()
-            val ffIndex = selectedTrack?.ffIndex
-            val subtitleOrder = selectedTrack?.subtitleOrder
-            val codecHint = selectedTrack?.codec
-            val candidates = decoderPathCandidates()
-            Log.d(TAG, "LeiaImageSub: imageTrack branch codec=$codecHint ffIndex=$ffIndex subtitleOrder=$subtitleOrder candidates=$candidates")
-            if (ffIndex == null || subtitleOrder == null || candidates.isEmpty()) {
-                Log.w(TAG, "LeiaImageSub: bailing out, missing ffIndex/subtitleOrder/candidates")
-                stopImageSubtitleDecoder(resetNative = true)
-                MPVLib.setPropertyBoolean("sub-visibility", true)
-                player.setStereoSubtitleEnabled(false)
-                return
-            }
-            val requestKey = "${candidates.joinToString("|")}#$ffIndex#$subtitleOrder#${codecHint ?: ""}"
-            val needInit = !imageSubtitleDecoderReady ||
-                !candidates.contains(imageSubtitleDecoderPath) ||
-                imageSubtitleDecoderFfIndex != ffIndex
-            Log.d(TAG, "LeiaImageSub: needInit=$needInit decoderState=$imageSubtitleDecoderState decoderReady=$imageSubtitleDecoderReady decoderPath=$imageSubtitleDecoderPath")
-            if (needInit && imageSubtitleDecoderState != ImageSubtitleDecoderState.INITIALIZING) {
-                if (imageSubtitleDecoderState == ImageSubtitleDecoderState.FAILED &&
-                    imageSubtitleDecoderFailedKey == requestKey) {
-                    Log.w(TAG, "LeiaImageSub: previously failed for this exact request, not retrying")
-                    persistSubtitleDepth()
-                    return
-                }
-                stopImageSubtitleDecoder(resetNative = true)
-                Log.d(TAG, "LeiaImageSub: starting decoder init")
-                startImageSubtitleDecoderInit(candidates, ffIndex, subtitleOrder, codecHint)
-            }
-            applySubtitleDepth(subtitleDepth)
-            if (imageSubtitleDecoderState == ImageSubtitleDecoderState.READY) {
-                updateImageSubtitleFrame(player.timePos ?: 0.0)
-            }
-            persistSubtitleDepth()
+            // Pre-authored stereo PGS/VobSub/etc already has its L/R content
+            // positioned to match the packed SBS/TAB frame, the same way the
+            // video itself is packed — so mpv's own native subtitle rendering
+            // already produces a correct stereo result here, same as if it
+            // were part of the video. No need for the custom bitmap
+            // decode/duplicate pipeline built for text subtitles, which only
+            // makes sense for content that ISN'T already stereo-aware.
+            //
+            // Correct positioning depends on osd-keepaspect being set in
+            // applyLeiaDisplayProperties() — see the comment there.
+            //
+            // Mono image subtitles aren't stereo-aware at all, so instead of
+            // relying on the (correct, but single) image being split across
+            // both eyes by our own shader, mpv's stereo-in filter duplicates
+            // it into both eyes directly, matching the current SBS/TAB
+            // packing. Position and scale are both meaningful either way (a
+            // pre-authored stereo subtitle can still be authored slightly
+            // off-position or off-scale for this display), so both sliders
+            // stay user-controlled regardless of pre-authored vs. mono.
+            MPVLib.setPropertyBoolean("sub-visibility", true)
+            applyImageSubtitlePosition(imageSubtitlePosition)
+            applyImageSubtitleScale(imageSubtitleScale)
+            player.setStereoSubtitleEnabled(false)
+            stopImageSubtitleDecoder(resetNative = true)
             return
         }
+
+        MPVLib.setPropertyBoolean("sub-visibility", false)
+        player.setStereoSubtitleEnabled(true)
         stopImageSubtitleDecoder(resetNative = true)
         applySubtitleDepth(subtitleDepth)
         updateStereoSubtitleText(currentSubText)
@@ -2777,12 +3019,29 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val modeHalfTab = dialogView.findViewById<android.widget.RadioButton>(R.id.modeHalfTab)
         val modeFullTab = dialogView.findViewById<android.widget.RadioButton>(R.id.modeFullTab)
         val swapEyesCheck = dialogView.findViewById<CheckBox>(R.id.swapEyesCheck)
+        val depthLabel = dialogView.findViewById<android.widget.TextView>(R.id.depthLabel)
         val depthSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.depthSeekBar)
         val depthValue = dialogView.findViewById<android.widget.TextView>(R.id.depthValue)
+        val positionLabel = dialogView.findViewById<android.widget.TextView>(R.id.positionLabel)
         val positionSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.positionSeekBar)
         val positionValue = dialogView.findViewById<android.widget.TextView>(R.id.positionValue)
+        val sizeLabel = dialogView.findViewById<android.widget.TextView>(R.id.sizeLabel)
         val sizeSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.sizeSeekBar)
         val sizeValue = dialogView.findViewById<android.widget.TextView>(R.id.sizeValue)
+        val imageSubtitle3DCheck = dialogView.findViewById<CheckBox>(R.id.imageSubtitle3DCheck)
+        val imageSubtitle3DCheckLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitle3DCheckLabel)
+        val imageSubtitleScaleLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitleScaleLabel)
+        val imageSubtitleScaleSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.imageSubtitleScaleSeekBar)
+        val imageSubtitleScaleValue = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitleScaleValue)
+        val imageSubtitlePositionLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitlePositionLabel)
+        val imageSubtitlePositionSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.imageSubtitlePositionSeekBar)
+        val imageSubtitlePositionValue = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitlePositionValue)
+        val imageSubsScaleXLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubsScaleXLabel)
+        val imageSubsScaleXSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.imageSubsScaleXSeekBar)
+        val imageSubsScaleXValue = dialogView.findViewById<android.widget.TextView>(R.id.imageSubsScaleXValue)
+        val imageSubsScaleYLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubsScaleYLabel)
+        val imageSubsScaleYSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.imageSubsScaleYSeekBar)
+        val imageSubsScaleYValue = dialogView.findViewById<android.widget.TextView>(R.id.imageSubsScaleYValue)
 
         // Set initial radio selection from current format
         when (currentLeiaFormat) {
@@ -2803,20 +3062,82 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         sizeSeekBar.progress = subtitleSize + 15
         sizeValue.text = if (subtitleSize >= 0) "+$subtitleSize" else "$subtitleSize"
 
-        swapEyesCheck.isChecked = player.getSwapImages()
+        fun formatImageSubtitleScale(slider: Int): String {
+            return String.format("%.1f", mapImageSubtitleScale(slider))
+        }
+        fun formatImageSubtitlePosition(position: Int): String {
+            return "$position"
+        }
+        fun formatImageSubsScale(tenths: Int): String {
+            return String.format("%.1fx", tenths / 10.0)
+        }
+        fun setTextSubtitleSlidersEnabled(enabled: Boolean) {
+            depthLabel.isEnabled = enabled
+            depthSeekBar.isEnabled = enabled
+            depthValue.isEnabled = enabled
+            positionLabel.isEnabled = enabled
+            positionSeekBar.isEnabled = enabled
+            positionValue.isEnabled = enabled
+            sizeLabel.isEnabled = enabled
+            sizeSeekBar.isEnabled = enabled
+            sizeValue.isEnabled = enabled
+        }
+
+        fun setImageSubtitleSlidersEnabled(enabled: Boolean) {
+            imageSubtitle3DCheck.isEnabled = enabled
+            imageSubtitle3DCheckLabel.isEnabled = enabled
+            imageSubtitleScaleLabel.isEnabled = enabled
+            imageSubtitleScaleSeekBar.isEnabled = enabled
+            imageSubtitleScaleValue.isEnabled = enabled
+            imageSubtitlePositionLabel.isEnabled = enabled
+            imageSubtitlePositionSeekBar.isEnabled = enabled
+            imageSubtitlePositionValue.isEnabled = enabled
+            imageSubsScaleXLabel.isEnabled = enabled
+            imageSubsScaleXSeekBar.isEnabled = enabled
+            imageSubsScaleXValue.isEnabled = enabled
+            imageSubsScaleYLabel.isEnabled = enabled
+            imageSubsScaleYSeekBar.isEnabled = enabled
+            imageSubsScaleYValue.isEnabled = enabled
+        }
+
+        imageSubtitle3DCheck.isChecked = imageSubtitle3D
+        imageSubtitleScaleSeekBar.progress = imageSubtitleScale + 15
+        imageSubtitleScaleValue.text = formatImageSubtitleScale(imageSubtitleScale)
+        imageSubtitlePositionSeekBar.progress = imageSubtitlePosition - 50
+        imageSubtitlePositionValue.text = formatImageSubtitlePosition(imageSubtitlePosition)
+        imageSubsScaleXSeekBar.progress = imageSubsScaleX - 1
+        imageSubsScaleXValue.text = formatImageSubsScale(imageSubsScaleX)
+        imageSubsScaleYSeekBar.progress = imageSubsScaleY - 1
+        imageSubsScaleYValue.text = formatImageSubsScale(imageSubsScaleY)
+
+        // Sliders are enabled/disabled based on which kind of subtitle track
+        // is currently selected, not on the "3D subtitle" checkbox.
+        val imageSubtitleTrackActive = isImageSubtitleTrackSelected()
+        val textSubtitleTrackActive = player.sid != -1 && !imageSubtitleTrackActive
+        if (!textSubtitleTrackActive && !imageSubtitleTrackActive) {
+            setTextSubtitleSlidersEnabled(false)
+            setImageSubtitleSlidersEnabled(false)
+        } else {
+            setTextSubtitleSlidersEnabled(!imageSubtitleTrackActive)
+            setImageSubtitleSlidersEnabled(!textSubtitleTrackActive)
+        }
+        
+
+        // Change initialization and listener:
+        swapEyesCheck.isChecked = swapEyes
         swapEyesCheck.setOnCheckedChangeListener { _, isChecked ->
+            swapEyes = isChecked
             player.setSwapImages(isChecked)
+            persistImageSubtitleSwapEyes()
         }
 
         depthSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val depth = progress - 15
                 depthValue.text = if (depth >= 0) "+$depth" else "$depth"
-                if (fromUser) {
-                    subtitleDepth = depth
-                    applySubtitleDepth(subtitleDepth)
-                    persistSubtitleDepth()
-                }
+                subtitleDepth = depth
+                applySubtitleDepth(subtitleDepth)
+                persistSubtitleDepth()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -2826,11 +3147,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val position = progress - 15
                 positionValue.text = if (position >= 0) "+$position" else "$position"
-                if (fromUser) {
-                    subtitlePosition = position
-                    applySubtitlePosition(subtitlePosition)
-                    persistSubtitlePosition()
-                }
+                subtitlePosition = position
+                applySubtitlePosition(subtitlePosition)
+                persistSubtitlePosition()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -2840,11 +3159,67 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val size = progress - 15
                 sizeValue.text = if (size >= 0) "+$size" else "$size"
-                if (fromUser) {
-                    subtitleSize = size
-                    applySubtitleSize(subtitleSize)
-                    persistSubtitleSize()
-                }
+                subtitleSize = size
+                applySubtitleSize(subtitleSize)
+                persistSubtitleSize()
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
+        imageSubtitle3DCheck.setOnCheckedChangeListener { _, isChecked ->
+            imageSubtitle3D = isChecked
+            if (isChecked) imageSubsScaleXSeekBar.progress = 9
+            applyImageSubtitleStereoMode()
+            applyImageSubtitlePosition(imageSubtitlePosition)
+            applyImageSubtitleScale(imageSubtitleScale)
+            applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+            persistImageSubtitle3D()
+        }
+
+        imageSubtitleScaleSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val scale = progress - 15
+                imageSubtitleScaleValue.text = formatImageSubtitleScale(scale)
+                imageSubtitleScale = scale
+                applyImageSubtitleScale(imageSubtitleScale)
+                persistImageSubtitleScale()
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
+        imageSubtitlePositionSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val position = progress + 50
+                imageSubtitlePositionValue.text = formatImageSubtitlePosition(position)
+                imageSubtitlePosition = position
+                applyImageSubtitlePosition(imageSubtitlePosition)
+                persistImageSubtitlePosition()
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
+        imageSubsScaleXSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val tenths = progress + 1
+                imageSubsScaleXValue.text = formatImageSubsScale(tenths)
+                imageSubsScaleX = tenths
+                applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+                persistImageSubsScaleX()
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
+        imageSubsScaleYSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val tenths = progress + 1
+                imageSubsScaleYValue.text = formatImageSubsScale(tenths)
+                imageSubsScaleY = tenths
+                applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+                persistImageSubsScaleY()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -2869,6 +3244,18 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 persistSubtitleDepth()
                 persistSubtitlePosition()
                 persistSubtitleSize()
+                imageSubtitle3D = imageSubtitle3DCheck.isChecked
+                imageSubtitleScale = imageSubtitleScaleSeekBar.progress - 15
+                imageSubtitlePosition = imageSubtitlePositionSeekBar.progress + 50
+                imageSubsScaleX = imageSubsScaleXSeekBar.progress + 1
+                imageSubsScaleY = imageSubsScaleYSeekBar.progress + 1
+                swapEyes = swapEyesCheck.isChecked
+                persistImageSubtitle3D()
+                persistImageSubtitleScale()
+                persistImageSubtitlePosition()
+                persistImageSubsScaleX()
+                persistImageSubsScaleY()
+                persistImageSubtitleSwapEyes()
                 apply3DMode(newFormat)
                 restore()
             }
@@ -2878,9 +3265,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
         dialog.show()
         dialog.window?.decorView?.post {
-            val currentWidth = dialog.window?.decorView?.width ?: 0
-            if (currentWidth > 0)
-                dialog.window?.setLayout((currentWidth * 2) / 3, WindowManager.LayoutParams.WRAP_CONTENT)
+            val screenWidth = resources.displayMetrics.widthPixels
+            val desiredWidth = Utils.convertDp(this, 820f)
+            val maxWidth = (screenWidth * 0.95f).toInt()
+            dialog.window?.setLayout(minOf(desiredWidth, maxWidth), WindowManager.LayoutParams.WRAP_CONTENT)
         }
     }
 
