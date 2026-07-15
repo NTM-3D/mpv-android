@@ -2880,7 +2880,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val lastDot = cleanFilename.lastIndexOf('.')
             val baseName = if (lastDot != -1) cleanFilename.substring(0, lastDot) else cleanFilename
 
-            val extensions = listOf("srt", "ass", "ssa", "sub")
+            val extensions = listOf("srt", "ass", "ssa", "txt")
             val wildcards = listOf(
                 "en", "eng", "es", "spa", "fr", "fre", "de", "ger", "it", "ita", "pt", "por", 
                 "ru", "rus", "zh", "chi", "jp", "jpn", "ko", "kor", "ar", "ara", "hi", "hin",
@@ -2904,19 +2904,19 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // 3. Probe each candidate; only add to MPV if the server confirms it exists
             for (url in candidates) {
                 if (isSubtitleUrlValid(url)) {
-                    Log.d(TAG, "Subsearch: Found valid subtitle: $url")
+                    Log.d(TAG, "guessNetworkSubtitles: Found valid subtitle: $url")
                     MPVLib.command(arrayOf("sub-add", url))
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Subsearch: Failed to guess network subtitles: $e")
+            Log.e(TAG, "guessNetworkSubtitles: Failed to guess network subtitles: $e")
         }
     }
 
     private fun isSubtitleUrlValid(url: String): Boolean {
         return try {
             val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "HEAD"
+            connection.requestMethod = "HEAD"   
             connection.connectTimeout = 300 // 300ms is very short, ideal for localhost
             connection.readTimeout = 300
             
@@ -2926,7 +2926,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // Fallback to GET if the server doesn't support HEAD (405 Method Not Allowed)
             if (code == 405) {
                 val getConn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                Log.d(TAG, "Subsearch: HEAD not supported")
                 getConn.requestMethod = "GET"
                 getConn.connectTimeout = 300
                 getConn.readTimeout = 300
