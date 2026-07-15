@@ -2379,12 +2379,27 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // actual video destination rect.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
         MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
+
         // Only SBS needs this — TAB's subtitle alignment breaks if it's on.
         val osdKeepAspect = when (format) {
             LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> true
             else -> false
         }
         MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive && imageSubtitle3D) osdKeepAspect else false)
+
+        // Apply correct stretch to mono image subtitles.
+        val scale-x = when (format) {
+            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> "0.5"
+            else -> "1.0"
+        }
+
+        val scale-y = when (format) {
+            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "2.0"
+            else -> "1.0"
+        }
+        MPVLib.setOptionString("image-subs-scale-x", scale-x)
+        MPVLib.setOptionString("image-subs-scale-y", scale-y)
+
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
@@ -2869,7 +2884,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // for this display), but scale correction only makes sense for
             // the duplicated/mono case.
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.setOptionString("image-subs-scale-x", "0.5")
             applyImageSubtitleStereoMode()
             applyImageSubtitlePosition(imageSubtitlePosition)
             if (imageSubtitle3D) {
