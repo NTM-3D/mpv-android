@@ -3120,6 +3120,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Disable3D()
             }
             LeiaFormat.HALF_SBS -> {
+                MPVLib.setOptionString("image-subs-scale-x", "0.5")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -3127,6 +3128,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
             LeiaFormat.HALF_TAB -> {
+                MPVLib.setOptionString("image-subs-scale-y", "2.0")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
@@ -3135,6 +3137,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 Enable3D()
             }
             LeiaFormat.FULL_SBS -> {
+                MPVLib.setOptionString("image-subs-scale-x", "0.5")
                 userForced3DOffForCurrentFile = false
                 imageSubtitleDecoderFailedKey = null
                 leiaEnabled = true
