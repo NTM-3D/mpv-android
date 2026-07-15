@@ -2839,7 +2839,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     // switching back to stereo-in=none), whereas "vf set" is mpv's
     // documented mechanism for atomically replacing the whole filter chain.
     private fun applyImageSubtitleStereoMode() {
-        val stereoIn = if (imageSubtitle3D) "no" else currentStereoInFilterValue()
+        val stereoIn = if (imageSubtitle3D || !leiaEnabled) "no" else currentStereoInFilterValue()
         MPVLib.setOptionString("vf", "format:stereo-in=$stereoIn")
     }
 
