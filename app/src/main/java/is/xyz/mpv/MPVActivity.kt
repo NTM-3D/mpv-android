@@ -2916,7 +2916,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun isSubtitleUrlValid(url: String): Boolean {
         return try {
             val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            connection.requestMethod = "HEAD"   
+            connection.requestMethod = "GET"   
             connection.connectTimeout = 300 // 300ms is very short, ideal for localhost
             connection.readTimeout = 300
             
@@ -2924,16 +2924,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             connection.disconnect()
 
             Log.d(TAG, "guessNetworkSubtitles: Code: $code URL: $url")
-
-            // Fallback to GET if the server doesn't support HEAD (405 Method Not Allowed)
-            if (code == 405) {
-                val getConn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                getConn.requestMethod = "GET"
-                getConn.connectTimeout = 300
-                getConn.readTimeout = 300
-                code = getConn.responseCode
-                getConn.disconnect()
-            }
 
             // 200 OK or 206 Partial Content means the file exists
             code == 200 || code == 206
