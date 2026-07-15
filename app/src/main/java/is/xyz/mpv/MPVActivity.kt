@@ -2755,6 +2755,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun defaultImageSubsScaleYTenths(format: LeiaFormat): Int = when (format) {
         LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> 5
+        LeiaFormat.HALF_SBS -> 15
         else -> 10
     }
 
@@ -2763,7 +2764,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         if (path.isEmpty()) return
         val prefs = getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE)
         val key = imageSubtitlePerFileKey(path)
-        imageSubtitle3D = prefs.getBoolean("${key}_3d", true)
+        imageSubtitle3D = prefs.getBoolean("${key}_3d", false)
         imageSubtitleScale = prefs.getInt("${key}_scale", 0).coerceIn(-15, 15)
         imageSubtitlePosition = prefs.getInt("${key}_position", 100).coerceIn(50, 150)
         imageSubsScaleX = prefs.getInt("${key}_scale_x", defaultImageSubsScaleXTenths(format)).coerceIn(1, 30)
