@@ -1,0 +1,81 @@
+diff --git a/options/options.c b/options/options.c
+index b0987a414f..78186d8136 100644
+--- a/options/options.c
++++ b/options/options.c
+@@ -303,6 +303,9 @@ const struct m_sub_options mp_subtitle_sub_opts = {
+         {"sub-gray", OPT_BOOL(sub_gray)},
+         {"sub-ass", OPT_BOOL(ass_enabled), .flags = UPDATE_SUB_HARD},
+         {"sub-scale", OPT_FLOAT(sub_scale), M_RANGE(0, 100)},
++        {"image-subs-scale", OPT_FLOAT(image_subs_scale), M_RANGE(0, 100)},
++        {"image-subs-scale-x", OPT_FLOAT(image_subs_scale_x), M_RANGE(0, 100)},
++        {"image-subs-scale-y", OPT_FLOAT(image_subs_scale_y), M_RANGE(0, 100)},
+         {"sub-ass-line-spacing", OPT_FLOAT(ass_line_spacing),
+             M_RANGE(-1000, 1000)},
+         {"sub-use-margins", OPT_BOOL(sub_use_margins)},
+@@ -342,6 +345,9 @@ const struct m_sub_options mp_subtitle_sub_opts = {
+         .sub_scale_with_window = true,
+         .teletext_page = 0,
+         .sub_scale = 1,
++        .image_subs_scale = 1,
++        .image_subs_scale_x = 1,
++        .image_subs_scale_y = 1,
+         .ass_vsfilter_aspect_compat = true,
+         .ass_vsfilter_color_compat = 1,
+         .ass_vsfilter_blur_compat = true,
+diff --git a/options/options.h b/options/options.h
+index 3356eac28b..5ea080e486 100644
+--- a/options/options.h
++++ b/options/options.h
+@@ -97,6 +97,9 @@ struct mp_subtitle_opts {
+     bool ass_scale_with_window;
+     struct osd_style_opts *sub_style;
+     float sub_scale;
++    float image_subs_scale;
++    float image_subs_scale_x;
++    float image_subs_scale_y;
+     float sub_gauss;
+     bool sub_gray;
+     bool ass_enabled;
+diff --git a/sub/sd_lavc.c b/sub/sd_lavc.c
+index d646b207c4..15c5056355 100644
+--- a/sub/sd_lavc.c
++++ b/sub/sd_lavc.c
+@@ -505,18 +505,27 @@ static struct sub_bitmaps *get_bitmaps(struct sd *sd, struct mp_osd_res d,
+ 
+     osd_rescale_bitmaps(res, w, h, d, video_par);
+ 
+-    if (opts->sub_scale != 1.0 && shared_opts->ass_style_override[sd->order]) {
+-        for (int n = 0; n < res->num_parts; n++) {
+-            struct sub_bitmap *sub = &res->parts[n];
+-
+-            float shit = (opts->sub_scale - 1.0f) / 2;
++    if (shared_opts->ass_style_override[sd->order]) {
++        if (opts->image_subs_scale != 1.0 || opts->image_subs_scale_x != 1.0 ||
++            opts->image_subs_scale_y != 1.0) {
++            for (int n = 0; n < res->num_parts; n++) {
++                struct sub_bitmap *sub = &res->parts[n];
++
++                float shit_x, shit_y;
++                if (opts->image_subs_scale_x == 1.0 && opts->image_subs_scale_y == 1.0) {
++                    shit_x = shit_y = (opts->image_subs_scale - 1.0f) / 2;
++                } else {
++                    shit_x = (opts->image_subs_scale_x - 1.0f) / 2;
++                    shit_y = (opts->image_subs_scale_y - 1.0f) / 2;
++                }
+ 
+-            // Fortunately VO isn't supposed to give a FUCKING FUCK about
+-            // whether the sub might e.g. go outside of the screen.
+-            sub->x -= sub->dw * shit;
+-            sub->y -= sub->dh * shit;
+-            sub->dw += sub->dw * shit * 2;
+-            sub->dh += sub->dh * shit * 2;
++                // Fortunately VO isn't supposed to give a FUCKING FUCK about
++                // whether the sub might e.g. go outside of the screen.
++                sub->x -= sub->dw * shit_x;
++                sub->y -= sub->dh * shit_y;
++                sub->dw += sub->dw * shit_x * 2;
++                sub->dh += sub->dh * shit_y * 2;
++            }
+         }
+     }
+ 

@@ -20,6 +20,7 @@ fi
 # buffer edge-to-edge (see LeiaSurfaceView/applyLeiaDisplayProperties).
 if ! grep -q osd_keepaspect options/options.h 2>/dev/null; then
 	git apply ../../patches/mpv-osd-keepaspect.patch
+	git apply ../../patches/mpv-image-subs-scale.patch
 fi
 
 unset CC CXX # meson wants these unset

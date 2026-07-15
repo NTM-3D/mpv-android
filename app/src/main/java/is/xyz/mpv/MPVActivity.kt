@@ -2381,10 +2381,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
         // Only SBS needs this — TAB's subtitle alignment breaks if it's on.
         val osdKeepAspect = when (format) {
-            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> false
+            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> true
             else -> false
         }
-        MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive) osdKeepAspect else false)
+        MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive && imageSubtitle3D) osdKeepAspect else false)
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
 
