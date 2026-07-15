@@ -2392,14 +2392,14 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive && imageSubtitle3D) osdKeepAspect else false)
 
         // The imageSubsScaleX/Y sliders directly hold the value applied to
-        // image-subs-scale-x/y (stored in tenths, e.g. 5 = 0.5x). They're only
-        // usable when imageSubtitle3D is off, same as this whole stretch step.
-        // A file with no saved slider value defaults to the per-format
-        // auto-correct value (see defaultImageSubsScaleXTenths/YTenths).
+        // image-subs-scale-x/y (stored in tenths, e.g. 5 = 0.5x), applied
+        // whenever stereo is active regardless of imageSubtitle3D. A file
+        // with no saved slider value defaults to the per-format auto-correct
+        // value (see defaultImageSubsScaleXTenths/YTenths).
         val scaleX = imageSubsScaleX / 10.0
         val scaleY = imageSubsScaleY / 10.0
-        MPVLib.setOptionString("image-subs-scale-x", if (stereoActive && !imageSubtitle3D) scaleX.toString() else "1.0")
-        MPVLib.setOptionString("image-subs-scale-y", if (stereoActive && !imageSubtitle3D) scaleY.toString() else "1.0")
+        MPVLib.setOptionString("image-subs-scale-x", if (stereoActive) scaleX.toString() else "1.0")
+        MPVLib.setOptionString("image-subs-scale-y", if (stereoActive) scaleY.toString() else "1.0")
 
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
@@ -2964,17 +2964,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // relying on the (correct, but single) image being split across
             // both eyes by our own shader, mpv's stereo-in filter duplicates
             // it into both eyes directly, matching the current SBS/TAB
-            // packing. Position is meaningful either way (a pre-authored
-            // stereo subtitle can still be authored slightly off-position
-            // for this display), but scale correction only makes sense for
-            // the duplicated/mono case.
+            // packing. Position and scale are both meaningful either way (a
+            // pre-authored stereo subtitle can still be authored slightly
+            // off-position or off-scale for this display), so both sliders
+            // stay user-controlled regardless of pre-authored vs. mono.
             MPVLib.setPropertyBoolean("sub-visibility", true)
             applyImageSubtitlePosition(imageSubtitlePosition)
-            if (imageSubtitle3D) {
-                MPVLib.setPropertyDouble("sub-scale", 1.0)
-            } else {
-                applyImageSubtitleScale(imageSubtitleScale)
-            }
+            applyImageSubtitleScale(imageSubtitleScale)
             player.setStereoSubtitleEnabled(false)
             stopImageSubtitleDecoder(resetNative = true)
             return
@@ -3023,10 +3019,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val modeHalfTab = dialogView.findViewById<android.widget.RadioButton>(R.id.modeHalfTab)
         val modeFullTab = dialogView.findViewById<android.widget.RadioButton>(R.id.modeFullTab)
         val swapEyesCheck = dialogView.findViewById<CheckBox>(R.id.swapEyesCheck)
+        val depthLabel = dialogView.findViewById<android.widget.TextView>(R.id.depthLabel)
         val depthSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.depthSeekBar)
         val depthValue = dialogView.findViewById<android.widget.TextView>(R.id.depthValue)
+        val positionLabel = dialogView.findViewById<android.widget.TextView>(R.id.positionLabel)
         val positionSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.positionSeekBar)
         val positionValue = dialogView.findViewById<android.widget.TextView>(R.id.positionValue)
+        val sizeLabel = dialogView.findViewById<android.widget.TextView>(R.id.sizeLabel)
         val sizeSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.sizeSeekBar)
         val sizeValue = dialogView.findViewById<android.widget.TextView>(R.id.sizeValue)
         val imageSubtitle3DCheck = dialogView.findViewById<CheckBox>(R.id.imageSubtitle3DCheck)
@@ -3071,10 +3070,25 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         fun formatImageSubsScale(tenths: Int): String {
             return String.format("%.1fx", tenths / 10.0)
         }
-        fun setImageSubtitleScaleEnabled(enabled: Boolean) {
+        fun setTextSubtitleSlidersEnabled(enabled: Boolean) {
+            depthLabel.isEnabled = enabled
+            depthSeekBar.isEnabled = enabled
+            depthValue.isEnabled = enabled
+            positionLabel.isEnabled = enabled
+            positionSeekBar.isEnabled = enabled
+            positionValue.isEnabled = enabled
+            sizeLabel.isEnabled = enabled
+            sizeSeekBar.isEnabled = enabled
+            sizeValue.isEnabled = enabled
+        }
+
+        fun setImageSubtitleSlidersEnabled(enabled: Boolean) {
             imageSubtitleScaleLabel.isEnabled = enabled
             imageSubtitleScaleSeekBar.isEnabled = enabled
             imageSubtitleScaleValue.isEnabled = enabled
+            imageSubtitlePositionLabel.isEnabled = enabled
+            imageSubtitlePositionSeekBar.isEnabled = enabled
+            imageSubtitlePositionValue.isEnabled = enabled
             imageSubsScaleXLabel.isEnabled = enabled
             imageSubsScaleXSeekBar.isEnabled = enabled
             imageSubsScaleXValue.isEnabled = enabled
@@ -3092,7 +3106,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubsScaleXValue.text = formatImageSubsScale(imageSubsScaleX)
         imageSubsScaleYSeekBar.progress = imageSubsScaleY - 1
         imageSubsScaleYValue.text = formatImageSubsScale(imageSubsScaleY)
-        setImageSubtitleScaleEnabled(!imageSubtitle3D)
+
+        // Sliders are enabled/disabled based on which kind of subtitle track
+        // is currently selected, not on the "3D subtitle" checkbox.
+        val imageSubtitleTrackActive = isImageSubtitleTrackSelected()
+        val textSubtitleTrackActive = player.sid != -1 && !imageSubtitleTrackActive
+        setTextSubtitleSlidersEnabled(!imageSubtitleTrackActive)
+        setImageSubtitleSlidersEnabled(!textSubtitleTrackActive)
 
         // Change initialization and listener:
         swapEyesCheck.isChecked = swapEyes
@@ -3146,14 +3166,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitle3DCheck.setOnCheckedChangeListener { _, isChecked ->
             imageSubtitle3D = isChecked
-            setImageSubtitleScaleEnabled(!isChecked)
             applyImageSubtitleStereoMode()
             applyImageSubtitlePosition(imageSubtitlePosition)
-            if (isChecked) {
-                MPVLib.setPropertyDouble("sub-scale", 1.0)
-            } else {
-                applyImageSubtitleScale(imageSubtitleScale)
-            }
+            applyImageSubtitleScale(imageSubtitleScale)
             applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
             persistImageSubtitle3D()
         }
