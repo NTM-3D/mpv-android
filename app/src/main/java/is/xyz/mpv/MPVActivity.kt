@@ -2915,6 +2915,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun isSubtitleUrlValid(url: String): Boolean {
         return try {
+            Log.d(TAG, "guessNetworkSubtitles: Trying: $url")
             val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "HEAD"   
             connection.connectTimeout = 300 // 300ms is very short, ideal for localhost
