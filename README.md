@@ -61,6 +61,11 @@ When playing media from SMB shares via file explorers (e.g., CX File Explorer), 
 1. Exact name matches: `movie.srt`, `movie.ass`, `movie.vtt`, etc.
 2. Language matches: `movie.en.srt`, `movie.eng.srt`, `movie.forced.srt`, `movie.sdh.srt`, etc.
 
+| Format | Auto-detected names |
+| --- | --- |
+| Extensions | `srt`, `ass`, `ssa`, `txt` |
+| Wildcards | `en`, `eng`, `es`, `spa`, `fr`, `fre`, `de`, `ger`, `it`, `ita`, `pt`, `por`, `ru`, `rus`, `zh`, `chi`, `jp`, `jpn`, `ko`, `kor`, `ar`, `ara`, `hi`, `hin`, `sv`, `se`, `fi`, `no`, `dk`, `forced`, `sdh`, `cc`, `default` |
+
 ## Image File Playback
 
 You can now open image files (`.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`, `.gif`) directly from Android file explorers. If the image filename contains 3D markers (e.g., `photo_hsbs.jpg`), it will automatically render in the correct 3D mode, just like a video file.
