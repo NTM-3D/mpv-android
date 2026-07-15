@@ -2862,10 +2862,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     }
 
     private fun guessNetworkSubtitles(filepath: String) {
-        // Only attempt this for HTTP streams
         if (!filepath.startsWith("http://")) return
-		
-		// Prevent running multiple times for the same file
         if (hasGuessedNetworkSubtitles) return
         hasGuessedNetworkSubtitles = true
 
@@ -2876,7 +2873,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val dirUrl = filepath.substring(0, lastSlash + 1)
             val filename = filepath.substring(lastSlash + 1)
             
-            // Strip query parameters if present (e.g., ?token=123)
             val queryIndex = filename.indexOf('?')
             val cleanFilename = if (queryIndex != -1) filename.substring(0, queryIndex) else filename
             val queryString = if (queryIndex != -1) filename.substring(queryIndex) else ""
@@ -2884,34 +2880,72 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val lastDot = cleanFilename.lastIndexOf('.')
             val baseName = if (lastDot != -1) cleanFilename.substring(0, lastDot) else cleanFilename
 
-            // All standard subtitle extensions
-            val extensions = listOf(
-                "srt", "ass", "ssa", "vtt", "txt"
-            )
+            // 1. Attempt to fetch directory listing first (1 HTTP request)
+            val foundSubtitleUrls = fetchDirectorySubtitleUrls(dirUrl, baseName, queryString)
             
-            for (ext in extensions) {
-                val exactUrl = "$dirUrl$baseName.$ext$queryString"
-                MPVLib.command(arrayOf("sub-add", exactUrl))
+            if (foundSubtitleUrls.isNotEmpty()) {
+                for (subUrl in foundSubtitleUrls) {
+                    MPVLib.command(arrayOf("sub-add", subUrl))
+                }
+                return // Success: skip blind guessing
             }
 
-            // 2. Add the wildcard guesses. 
-            // (We MUST use a list because HTTP servers do not understand the '*' character 
-            // and will just return a 404 error for a file literally named "*.srt").
+            // 2. Fallback: Blind guessing if directory listing is unsupported or empty
+            val extensions = listOf("srt", "ass", "ssa", "vtt", "txt")
             val wildcards = listOf(
                 "en", "eng", "es", "spa", "fr", "fre", "de", "ger", "it", "ita", "pt", "por", 
                 "ru", "rus", "zh", "chi", "jp", "jpn", "ko", "kor", "ar", "ara", "hi", "hin",
-				"sv", "se", "fi", "no", "forced", "hi", "sdh", "cc", "default"
+                "sv", "se", "fi", "no", "forced", "sdh", "cc", "default"
             )
 
             for (ext in extensions) {
+                MPVLib.command(arrayOf("sub-add", "$dirUrl$baseName.$ext$queryString"))
                 for (wildcard in wildcards) {
-                    val wildcardUrl = "$dirUrl$baseName.$wildcard.$ext$queryString"
-                    MPVLib.command(arrayOf("sub-add", wildcardUrl))
+                    MPVLib.command(arrayOf("sub-add", "$dirUrl$baseName.$wildcard.$ext$queryString"))
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to guess network subtitles: $e")
         }
+    }
+
+    private fun fetchDirectorySubtitleUrls(dirUrl: String, baseName: String, queryString: String): List<String> {
+        val subtitleUrls = mutableListOf<String>()
+        try {
+            Log.d(TAG, "Subsearch: Attempting directory listing: $dirUrl")
+            val connection = java.net.URL(dirUrl).openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 2000
+            connection.readTimeout = 2000
+
+            if (connection.responseCode == 200) {
+                val content = connection.inputStream.bufferedReader().use { it.readText() }
+                // Log truncated content to avoid Logcat 4000-char limits
+                Log.d(TAG, "Subsearch: Directory response (first 2000 chars): ${content.take(2000)}")
+                
+                val regex = Regex("""href=["']([^"']+\.(?:srt|ass|ssa|vtt|txt))["']""", RegexOption.IGNORE_CASE)
+                
+                for (match in regex.findAll(content)) {
+                    val href = match.groupValues[1]
+                    val decodedBaseName = java.net.URLDecoder.decode(baseName, "UTF-8")
+                    
+                    if (href.contains(baseName, ignoreCase = true) || href.contains(decodedBaseName, ignoreCase = true)) {
+                        val fullUrl = java.net.URL(java.net.URL(dirUrl), href).toString() + queryString
+                        val decodedUrl = java.net.URLDecoder.decode(fullUrl, "UTF-8")
+                        
+                        if (!subtitleUrls.contains(decodedUrl)) {
+                            subtitleUrls.add(decodedUrl)
+                        }
+                    }
+                }
+                Log.d(TAG, "Subsearch: Successfully parsed subtitle URLs: $subtitleUrls")
+            } else {
+                Log.d(TAG, "Subsearch: Directory listing returned non-200 response code: ${connection.responseCode}")
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Subsearch: Directory listing failed or unsupported (falling back to blind guess): ${e.message}")
+        }
+        return subtitleUrls
     }
 
     private fun updateStereoSubtitleMode() {
