@@ -1,32 +1,30 @@
 diff --git a/options/options.c b/options/options.c
-index b0987a414f..78186d8136 100644
 --- a/options/options.c
 +++ b/options/options.c
-@@ -314,6 +314,9 @@ const struct m_sub_options mp_subtitle_sub_opts = {
-     {"sub-gray", OPT_BOOL(sub_gray)},
-     {"sub-ass", OPT_BOOL(ass_enabled), .flags = UPDATE_SUB_HARD},
-     {"sub-scale", OPT_FLOAT(sub_scale), M_RANGE(0, 100)},
-+    {"image-subs-scale", OPT_FLOAT(image_subs_scale), M_RANGE(0, 100)},
-+    {"image-subs-scale-x", OPT_FLOAT(image_subs_scale_x), M_RANGE(0, 100)},
-+    {"image-subs-scale-y", OPT_FLOAT(image_subs_scale_y), M_RANGE(0, 100)},
-     {"sub-scale-signs", OPT_BOOL(sub_scale_signs)},
-     {"sub-line-spacing", OPT_FLOAT(sub_line_spacing), M_RANGE(-1000, 1000)},
-     {"sub-ass-line-spacing", OPT_REPLACED("sub-line-spacing")},
-@@ -363,6 +366,9 @@ const struct m_sub_options mp_subtitle_sub_opts = {
-     .ass_prune_delay = -1.0,
-     .teletext_page = 0,
-     .sub_scale = 1,
-+    .image_subs_scale = 1,
-+    .image_subs_scale_x = 1,
-+    .image_subs_scale_y = 1,
-     .ass_vsfilter_color_compat = 1,
-     .ass_use_video_data = 2,
-     .ass_video_aspect = 0,
+@@ -317,6 +317,9 @@ const struct m_sub_options mp_subtitle_sub_opts = {
+         {"sub-gray", OPT_BOOL(sub_gray)},
+         {"sub-ass", OPT_BOOL(ass_enabled), .flags = UPDATE_SUB_HARD},
+         {"sub-scale", OPT_FLOAT(sub_scale), M_RANGE(0, 100)},
++        {"image-subs-scale", OPT_FLOAT(image_subs_scale), M_RANGE(0, 100)},
++        {"image-subs-scale-x", OPT_FLOAT(image_subs_scale_x), M_RANGE(0, 100)},
++        {"image-subs-scale-y", OPT_FLOAT(image_subs_scale_y), M_RANGE(0, 100)},
+         {"sub-scale-signs", OPT_BOOL(sub_scale_signs)},
+         {"sub-line-spacing", OPT_FLOAT(sub_line_spacing), M_RANGE(-1000, 1000)},
+         {"sub-ass-line-spacing", OPT_REPLACED("sub-line-spacing")},
+@@ -367,6 +370,9 @@ const struct m_sub_options mp_subtitle_sub_opts = {
+         .ass_prune_delay = -1.0,
+         .teletext_page = 0,
+         .sub_scale = 1,
++        .image_subs_scale = 1,
++        .image_subs_scale_x = 1,
++        .image_subs_scale_y = 1,
+         .ass_vsfilter_color_compat = 1,
+         .ass_use_video_data = 2,
+         .ass_video_aspect = 0,
 diff --git a/options/options.h b/options/options.h
-index 3356eac28b..5ea080e486 100644
 --- a/options/options.h
 +++ b/options/options.h
-@@ -76,6 +76,9 @@ struct mp_subtitle_opts {
+@@ -95,6 +95,9 @@ struct mp_subtitle_opts {
      bool ass_scale_with_window;
      struct osd_style_opts *sub_style;
      float sub_scale;
@@ -37,10 +35,9 @@ index 3356eac28b..5ea080e486 100644
      float sub_gauss;
      bool sub_gray;
 diff --git a/sub/sd_lavc.c b/sub/sd_lavc.c
-index d646b207c4..15c5056355 100644
 --- a/sub/sd_lavc.c
 +++ b/sub/sd_lavc.c
-@@ -468,16 +468,25 @@ static struct sub_bitmaps *get_bitmaps(struct sd *sd, struct mp_osd_res d,
+@@ -485,18 +485,27 @@ static struct sub_bitmaps *get_bitmaps(struct sd *sd, struct mp_osd_res d,
  
      osd_rescale_bitmaps(res, w, h, d, video_par);
  
