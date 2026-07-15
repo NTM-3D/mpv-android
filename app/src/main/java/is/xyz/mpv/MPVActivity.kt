@@ -2394,7 +2394,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         val scaleY = when (format) {
-            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "1.5"
+            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "0.5"
             else -> "1.0"
         }
         MPVLib.setOptionString("image-subs-scale-x", if (stereoActive && !imageSubtitle3D) scaleX else "1.0")
