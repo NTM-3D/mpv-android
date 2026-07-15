@@ -3053,7 +3053,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubtitle3DCheck.isChecked = imageSubtitle3D
         imageSubtitleScaleSeekBar.progress = imageSubtitleScale + 15
         imageSubtitleScaleValue.text = formatImageSubtitleScale(imageSubtitleScale)
-        imageSubtitlePositionSeekBar.progress = imageSubtitlePosition - 50
+        imageSubtitlePositionSeekBar.progress = imageSubtitlePosition
         imageSubtitlePositionValue.text = formatImageSubtitlePosition(imageSubtitlePosition)
         imageSubsScaleXSeekBar.progress = imageSubsScaleX - 1
         imageSubsScaleXValue.text = formatImageSubsScale(imageSubsScaleX)
@@ -3198,10 +3198,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 persistSubtitlePosition()
                 persistSubtitleSize()
                 imageSubtitle3D = imageSubtitle3DCheck.isChecked
-                imageSubtitleScale = imageSubtitleScaleSeekBar.progress - 15
-                imageSubtitlePosition = imageSubtitlePositionSeekBar.progress - 15
-                imageSubsScaleX = imageSubsScaleXSeekBar.progress - 15
-                imageSubsScaleY = imageSubsScaleYSeekBar.progress - 15
+                imageSubtitleScale = imageSubtitleScaleSeekBar.progress
+                imageSubtitlePosition = imageSubtitlePositionSeekBar.progress
+                imageSubsScaleX = imageSubsScaleXSeekBar.progress
+                imageSubsScaleY = imageSubsScaleYSeekBar.progress
                 persistImageSubtitle3D()
                 persistImageSubtitleScale()
                 persistImageSubtitlePosition()
