@@ -3051,13 +3051,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         imageSubtitle3DCheck.isChecked = imageSubtitle3D
-        imageSubtitleScaleSeekBar.progress = imageSubtitleScale
+        imageSubtitleScaleSeekBar.progress = imageSubtitleScale + 15
         imageSubtitleScaleValue.text = formatImageSubtitleScale(imageSubtitleScale)
-        imageSubtitlePositionSeekBar.progress = imageSubtitlePosition
+        imageSubtitlePositionSeekBar.progress = imageSubtitlePosition - 50
         imageSubtitlePositionValue.text = formatImageSubtitlePosition(imageSubtitlePosition)
-        imageSubsScaleXSeekBar.progress = imageSubsScaleX
+        imageSubsScaleXSeekBar.progress = imageSubsScaleX - 1
         imageSubsScaleXValue.text = formatImageSubsScale(imageSubsScaleX)
-        imageSubsScaleYSeekBar.progress = imageSubsScaleY
+        imageSubsScaleYSeekBar.progress = imageSubsScaleY - 1
         imageSubsScaleYValue.text = formatImageSubsScale(imageSubsScaleY)
         setImageSubtitleScaleEnabled(!imageSubtitle3D)
 
@@ -3138,7 +3138,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitlePositionSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                val position = progress
+                val position = progress + 50
                 imageSubtitlePositionValue.text = formatImageSubtitlePosition(position)
                 if (fromUser) {
                     imageSubtitlePosition = position
@@ -3198,10 +3198,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 persistSubtitlePosition()
                 persistSubtitleSize()
                 imageSubtitle3D = imageSubtitle3DCheck.isChecked
-                imageSubtitleScale = imageSubtitleScaleSeekBar.progress
-                imageSubtitlePosition = imageSubtitlePositionSeekBar.progress
-                imageSubsScaleX = imageSubsScaleXSeekBar.progress
-                imageSubsScaleY = imageSubsScaleYSeekBar.progress
+                imageSubtitleScale = imageSubtitleScaleSeekBar.progress - 15
+                imageSubtitlePosition = imageSubtitlePositionSeekBar.progress + 50
+                imageSubsScaleX = imageSubsScaleXSeekBar.progress + 1
+                imageSubsScaleY = imageSubsScaleYSeekBar.progress + 1
                 persistImageSubtitle3D()
                 persistImageSubtitleScale()
                 persistImageSubtitlePosition()
