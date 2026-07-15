@@ -2390,11 +2390,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // Apply correct stretch to mono image subtitles.
         val scaleX = when (format) {
             LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> "0.5"
-            else -> "0.5"
+            else -> "1.0"
         }
 
         val scaleY = when (format) {
-            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "2.0"
+            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "1.5"
             else -> "1.0"
         }
         MPVLib.setOptionString("image-subs-scale-x", if (stereoActive && !imageSubtitle3D) scaleX else "1.0")
