@@ -2919,10 +2919,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         stereoSubtitleModeEnabled = shouldEnableStereoSubs
         val imageTrack = shouldEnableStereoSubs && isImageSubtitleTrackSelected()
         Log.d(TAG, "LeiaImageSub: updateStereoSubtitleMode sid=${player.sid} shouldEnableStereoSubs=$shouldEnableStereoSubs imageTrack=$imageTrack")
+        applyImageSubtitleStereoMode()
 
         if (!shouldEnableStereoSubs) {
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.setOptionString("vf", "format:stereo-in=no")
             MPVLib.setPropertyDouble("sub-scale", 1.0)
             MPVLib.setPropertyInt("sub-pos", 100)
             player.setStereoSubtitleEnabled(false)
@@ -2951,7 +2951,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // for this display), but scale correction only makes sense for
             // the duplicated/mono case.
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            applyImageSubtitleStereoMode()
             applyImageSubtitlePosition(imageSubtitlePosition)
             if (imageSubtitle3D) {
                 MPVLib.setPropertyDouble("sub-scale", 1.0)
@@ -3292,7 +3291,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
         updateStereoSubtitleMode()
-        applyImageSubtitleStereoMode()
     }
 
     fun checkShouldToggle3D(desired_state: Boolean) {
