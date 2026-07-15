@@ -2891,7 +2891,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             
             for (ext in extensions) {
                 val exactUrl = "$dirUrl$baseName.$ext$queryString"
-                MPVLib.command(arrayOf("sub-add", exactUrl, "auto"))
+                MPVLib.command(arrayOf("sub-add", exactUrl))
             }
 
             // 2. Add the wildcard guesses. 
@@ -2906,7 +2906,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             for (ext in extensions) {
                 for (wildcard in wildcards) {
                     val wildcardUrl = "$dirUrl$baseName.$wildcard.$ext$queryString"
-                    MPVLib.command(arrayOf("sub-add", wildcardUrl, "auto"))
+                    MPVLib.command(arrayOf("sub-add", wildcardUrl))
                 }
             }
         } catch (e: Exception) {
