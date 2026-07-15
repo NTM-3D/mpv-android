@@ -2964,10 +2964,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         MPVLib.setPropertyBoolean("sub-visibility", false)
-        applyImageSubtitleStereoMode()
-        //MPVLib.setOptionString("vf", "format:stereo-in=no")
-        //MPVLib.setPropertyDouble("sub-scale", 1.0)
-        //MPVLib.setPropertyInt("sub-pos", 100)
         player.setStereoSubtitleEnabled(true)
         stopImageSubtitleDecoder(resetNative = true)
         applySubtitleDepth(subtitleDepth)
@@ -3296,6 +3292,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         mPrevDesiredBacklightModeState = leiaEnabled
         update3DButton()
         updateStereoSubtitleMode()
+        applyImageSubtitleStereoMode()
     }
 
     fun checkShouldToggle3D(desired_state: Boolean) {
