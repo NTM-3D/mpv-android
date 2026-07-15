@@ -3029,6 +3029,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val sizeSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.sizeSeekBar)
         val sizeValue = dialogView.findViewById<android.widget.TextView>(R.id.sizeValue)
         val imageSubtitle3DCheck = dialogView.findViewById<CheckBox>(R.id.imageSubtitle3DCheck)
+        val imageSubtitle3DCheckLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitle3DCheckLabel)
         val imageSubtitleScaleLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitleScaleLabel)
         val imageSubtitleScaleSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.imageSubtitleScaleSeekBar)
         val imageSubtitleScaleValue = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitleScaleValue)
@@ -3084,6 +3085,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         fun setImageSubtitleSlidersEnabled(enabled: Boolean) {
             imageSubtitle3DCheck.isEnabled = enabled
+            imageSubtitle3DCheckLabel.isEnabled = enabled
             imageSubtitleScaleLabel.isEnabled = enabled
             imageSubtitleScaleSeekBar.isEnabled = enabled
             imageSubtitleScaleValue.isEnabled = enabled
@@ -3127,11 +3129,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val depth = progress - 15
                 depthValue.text = if (depth >= 0) "+$depth" else "$depth"
-                if (fromUser) {
-                    subtitleDepth = depth
-                    applySubtitleDepth(subtitleDepth)
-                    persistSubtitleDepth()
-                }
+                subtitleDepth = depth
+                applySubtitleDepth(subtitleDepth)
+                persistSubtitleDepth()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -3141,11 +3141,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val position = progress - 15
                 positionValue.text = if (position >= 0) "+$position" else "$position"
-                if (fromUser) {
-                    subtitlePosition = position
-                    applySubtitlePosition(subtitlePosition)
-                    persistSubtitlePosition()
-                }
+                subtitlePosition = position
+                applySubtitlePosition(subtitlePosition)
+                persistSubtitlePosition()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -3155,11 +3153,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val size = progress - 15
                 sizeValue.text = if (size >= 0) "+$size" else "$size"
-                if (fromUser) {
-                    subtitleSize = size
-                    applySubtitleSize(subtitleSize)
-                    persistSubtitleSize()
-                }
+                subtitleSize = size
+                applySubtitleSize(subtitleSize)
+                persistSubtitleSize()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -3167,12 +3163,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitle3DCheck.setOnCheckedChangeListener { _, isChecked ->
             imageSubtitle3D = isChecked
-
-            if (isChecked) {
-                imageSubsScaleXSeekBar.progress = 9
-                imageSubsScaleX = 9
-            }
-
+            if (isChecked) imageSubsScaleXSeekBar.progress = 9
             applyImageSubtitleStereoMode()
             applyImageSubtitlePosition(imageSubtitlePosition)
             applyImageSubtitleScale(imageSubtitleScale)
@@ -3184,11 +3175,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val scale = progress - 15
                 imageSubtitleScaleValue.text = formatImageSubtitleScale(scale)
-                if (fromUser) {
-                    imageSubtitleScale = scale
-                    applyImageSubtitleScale(imageSubtitleScale)
-                    persistImageSubtitleScale()
-                }
+                imageSubtitleScale = scale
+                applyImageSubtitleScale(imageSubtitleScale)
+                persistImageSubtitleScale()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -3198,11 +3187,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val position = progress + 50
                 imageSubtitlePositionValue.text = formatImageSubtitlePosition(position)
-                if (fromUser) {
-                    imageSubtitlePosition = position
-                    applyImageSubtitlePosition(imageSubtitlePosition)
-                    persistImageSubtitlePosition()
-                }
+                imageSubtitlePosition = position
+                applyImageSubtitlePosition(imageSubtitlePosition)
+                persistImageSubtitlePosition()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -3212,11 +3199,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val tenths = progress + 1
                 imageSubsScaleXValue.text = formatImageSubsScale(tenths)
-                if (fromUser) {
-                    imageSubsScaleX = tenths
-                    applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
-                    persistImageSubsScaleX()
-                }
+                imageSubsScaleX = tenths
+                applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+                persistImageSubsScaleX()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
@@ -3226,11 +3211,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
                 val tenths = progress + 1
                 imageSubsScaleYValue.text = formatImageSubsScale(tenths)
-                if (fromUser) {
-                    imageSubsScaleY = tenths
-                    applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
-                    persistImageSubsScaleY()
-                }
+                imageSubsScaleY = tenths
+                applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+                persistImageSubsScaleY()
             }
             override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
