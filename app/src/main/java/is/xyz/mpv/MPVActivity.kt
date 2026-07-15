@@ -2388,17 +2388,17 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive && imageSubtitle3D) osdKeepAspect else false)
 
         // Apply correct stretch to mono image subtitles.
-        val scale-x = when (format) {
+        val scaleX = when (format) {
             LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> "0.5"
             else -> "1.0"
         }
 
-        val scale-y = when (format) {
+        val scaleY = when (format) {
             LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "2.0"
             else -> "1.0"
         }
-        MPVLib.setOptionString("image-subs-scale-x", scale-x)
-        MPVLib.setOptionString("image-subs-scale-y", scale-y)
+        MPVLib.setOptionString("image-subs-scale-x", scaleX)
+        MPVLib.setOptionString("image-subs-scale-y", scaleY)
 
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
