@@ -3169,15 +3169,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             imageSubtitle3D = isChecked
 
             if (isChecked) {
-                val progress = 9
-                // Move the slider visually
-                imageSubsScaleXSeekBar.progress = progress
-                // Trigger the same logic as if the user moved the slider
-                imageSubsScaleXListener.onProgressChanged(
-                    imageSubsScaleXSeekBar,
-                    progress,
-                    true
-                )
+                imageSubsScaleXSeekBar.progress = 9
             }
 
             applyImageSubtitleStereoMode()
