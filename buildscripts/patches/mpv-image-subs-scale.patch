@@ -34,7 +34,7 @@ diff --git a/options/options.h b/options/options.h
 diff --git a/sub/sd_lavc.c b/sub/sd_lavc.c
 --- a/sub/sd_lavc.c
 +++ b/sub/sd_lavc.c
-@@ -505,18 +505,25 @@ static struct sub_bitmaps *get_bitmaps(struct sd *sd, struct mp_osd_res d,
+@@ -526,18 +526,27 @@ static struct sub_bitmaps *get_bitmaps(struct sd *sd, struct mp_osd_res d,
  
      osd_rescale_bitmaps(res, w, h, d, video_par);
  
