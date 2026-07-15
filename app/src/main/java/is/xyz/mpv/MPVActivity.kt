@@ -2379,6 +2379,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // actual video destination rect.
         val stereoActive = is3DActive && format != LeiaFormat.NONE
         MPVLib.setPropertyString("keepaspect", if (stereoActive) "no" else "yes")
+        // Only SBS needs this — TAB's subtitle alignment breaks if it's on.
         val osdKeepAspect = when (format) {
             LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> true
             else -> false
@@ -2753,9 +2754,15 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     // not be duplicated again (stereo-in=none). Mono ones need duplicating
     // to match the current SBS/TAB packing, same as apply3DMode() does for
     // the video itself.
+    //
+    // Uses the "vf set" runtime command rather than setOptionString: the
+    // latter doesn't reliably replace an already-active filter chain during
+    // playback (the previous sbs2l/ab2l filter stayed active even after
+    // switching back to stereo-in=none), whereas "vf set" is mpv's
+    // documented mechanism for atomically replacing the whole filter chain.
     private fun applyImageSubtitleStereoMode() {
         val stereoIn = if (imageSubtitle3D) "none" else currentStereoInFilterValue()
-        MPVLib.setOptionString("vf", "format:stereo-in=$stereoIn")
+        MPVLib.command(arrayOf("vf", "set", "format:stereo-in=$stereoIn"))
     }
 
     private fun applyImageSubtitleScale(scale: Int) {
@@ -2767,8 +2774,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun applyImageSubtitlePosition(position: Int) {
         val clamped = position.coerceIn(-15, 15)
-        // Map -15..15 (30 steps) to 60..120
-        val normalized = 60 + (clamped + 15) * (120 - 60) / 30
+        // Map -15..15 (30 steps) to 60..150
+        val normalized = 60 + (clamped + 15) * (150 - 60) / 30
         MPVLib.setPropertyInt("sub-pos", normalized)
     }
 
@@ -2833,7 +2840,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         if (!shouldEnableStereoSubs) {
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.setOptionString("vf", "format:stereo-in=none")
+            MPVLib.command(arrayOf("vf", "set", "format:stereo-in=none"))
             MPVLib.setPropertyDouble("sub-scale", 1.0)
             MPVLib.setPropertyInt("sub-pos", 100)
             player.setStereoSubtitleEnabled(false)
@@ -2857,17 +2864,17 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // relying on the (correct, but single) image being split across
             // both eyes by our own shader, mpv's stereo-in filter duplicates
             // it into both eyes directly, matching the current SBS/TAB
-            // packing. Scale/position corrections only make sense for that
-            // duplicated case — a pre-authored stereo subtitle is assumed
-            // already correctly sized and positioned.
+            // packing. Position is meaningful either way (a pre-authored
+            // stereo subtitle can still be authored slightly off-position
+            // for this display), but scale correction only makes sense for
+            // the duplicated/mono case.
             MPVLib.setPropertyBoolean("sub-visibility", true)
             applyImageSubtitleStereoMode()
+            applyImageSubtitlePosition(imageSubtitlePosition)
             if (imageSubtitle3D) {
                 MPVLib.setPropertyDouble("sub-scale", 1.0)
-                MPVLib.setPropertyInt("sub-pos", 100)
             } else {
                 applyImageSubtitleScale(imageSubtitleScale)
-                applyImageSubtitlePosition(imageSubtitlePosition)
             }
             player.setStereoSubtitleEnabled(false)
             stopImageSubtitleDecoder(resetNative = true)
@@ -2875,7 +2882,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         MPVLib.setPropertyBoolean("sub-visibility", false)
-        MPVLib.setOptionString("vf", "format:stereo-in=none")
+        MPVLib.command(arrayOf("vf", "set", "format:stereo-in=none"))
         MPVLib.setPropertyDouble("sub-scale", 1.0)
         MPVLib.setPropertyInt("sub-pos", 100)
         player.setStereoSubtitleEnabled(true)
@@ -2958,16 +2965,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             return String.format("%.1f", normalized)
         }
         fun formatImageSubtitlePosition(slider: Int): String {
-            val normalized = 60 + (slider + 15) * (120 - 60) / 30
+            val normalized = 60 + (slider + 15) * (150 - 60) / 30
             return "$normalized"
         }
-        fun setImageSubtitleControlsEnabled(enabled: Boolean) {
+        fun setImageSubtitleScaleEnabled(enabled: Boolean) {
             imageSubtitleScaleLabel.isEnabled = enabled
             imageSubtitleScaleSeekBar.isEnabled = enabled
             imageSubtitleScaleValue.isEnabled = enabled
-            imageSubtitlePositionLabel.isEnabled = enabled
-            imageSubtitlePositionSeekBar.isEnabled = enabled
-            imageSubtitlePositionValue.isEnabled = enabled
         }
 
         imageSubtitle3DCheck.isChecked = imageSubtitle3D
@@ -2975,7 +2979,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubtitleScaleValue.text = formatImageSubtitleScale(imageSubtitleScale)
         imageSubtitlePositionSeekBar.progress = imageSubtitlePosition + 15
         imageSubtitlePositionValue.text = formatImageSubtitlePosition(imageSubtitlePosition)
-        setImageSubtitleControlsEnabled(!imageSubtitle3D)
+        setImageSubtitleScaleEnabled(!imageSubtitle3D)
 
         swapEyesCheck.isChecked = player.getSwapImages()
         swapEyesCheck.setOnCheckedChangeListener { _, isChecked ->
@@ -3026,14 +3030,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitle3DCheck.setOnCheckedChangeListener { _, isChecked ->
             imageSubtitle3D = isChecked
-            setImageSubtitleControlsEnabled(!isChecked)
+            setImageSubtitleScaleEnabled(!isChecked)
             applyImageSubtitleStereoMode()
+            applyImageSubtitlePosition(imageSubtitlePosition)
             if (isChecked) {
                 MPVLib.setPropertyDouble("sub-scale", 1.0)
-                MPVLib.setPropertyInt("sub-pos", 100)
             } else {
                 applyImageSubtitleScale(imageSubtitleScale)
-                applyImageSubtitlePosition(imageSubtitlePosition)
             }
             persistImageSubtitle3D()
         }
