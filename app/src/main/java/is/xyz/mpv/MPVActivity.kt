@@ -3083,6 +3083,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         fun setImageSubtitleSlidersEnabled(enabled: Boolean) {
+            imageSubtitle3DCheck.isEnabled = enabled
             imageSubtitleScaleLabel.isEnabled = enabled
             imageSubtitleScaleSeekBar.isEnabled = enabled
             imageSubtitleScaleValue.isEnabled = enabled
@@ -3166,6 +3167,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitle3DCheck.setOnCheckedChangeListener { _, isChecked ->
             imageSubtitle3D = isChecked
+            MPVLib.setOptionString("image-subs-scale-x", if (!imageSubtitle3D) scaleX.toString() else "1.0")
             applyImageSubtitleStereoMode()
             applyImageSubtitlePosition(imageSubtitlePosition)
             applyImageSubtitleScale(imageSubtitleScale)
