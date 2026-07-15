@@ -58,7 +58,7 @@
                 <data android:scheme="tcp" />
                 <data android:scheme="udp" />
             </intent-filter>
-            <intent-filter> <!-- Local files with MIME type (e.g. Google Drive) -->
+            <intent-filter> <!-- Local files with MIME type (e.g. Google Drive, CX File Explorer) -->
                 <action android:name="android.intent.action.VIEW" />
 
                 <category android:name="android.intent.category.DEFAULT" />
@@ -68,6 +68,7 @@
                 <data android:scheme="file" />
                 <data android:mimeType="video/*" />
                 <data android:mimeType="audio/*" />
+                <data android:mimeType="image/*" />
             </intent-filter>
             <intent-filter> <!-- HTTP(S) with MIME type (#43) -->
                 <action android:name="android.intent.action.VIEW" />
@@ -81,6 +82,7 @@
                 <!-- no android:host since Android 12 doesn't like it, see #497 #514 -->
                 <data android:mimeType="video/*" />
                 <data android:mimeType="audio/*" />
+                <data android:mimeType="image/*" />
                 <data android:mimeType="application/vnd.apple.mpegurl" />
             </intent-filter>
             <intent-filter> <!-- HTTP(S) with extension (e.g. Chrome) -->
@@ -190,6 +192,55 @@
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.mpd" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.mpd" />
                 <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.mpd" />
+
+                <!-- Image extensions -->
+                <data android:pathPattern=".*\\.jpg" />
+                <data android:pathPattern=".*\\..*\\.jpg" />
+                <data android:pathPattern=".*\\..*\\..*\\.jpg" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.jpg" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.jpg" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.jpg" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.jpg" />
+
+                <data android:pathPattern=".*\\.jpeg" />
+                <data android:pathPattern=".*\\..*\\.jpeg" />
+                <data android:pathPattern=".*\\..*\\..*\\.jpeg" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.jpeg" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.jpeg" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.jpeg" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.jpeg" />
+
+                <data android:pathPattern=".*\\.png" />
+                <data android:pathPattern=".*\\..*\\.png" />
+                <data android:pathPattern=".*\\..*\\..*\\.png" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.png" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.png" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.png" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.png" />
+
+                <data android:pathPattern=".*\\.webp" />
+                <data android:pathPattern=".*\\..*\\.webp" />
+                <data android:pathPattern=".*\\..*\\..*\\.webp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.webp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.webp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.webp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.webp" />
+
+                <data android:pathPattern=".*\\.bmp" />
+                <data android:pathPattern=".*\\..*\\.bmp" />
+                <data android:pathPattern=".*\\..*\\..*\\.bmp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.bmp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.bmp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.bmp" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.bmp" />
+
+                <data android:pathPattern=".*\\.gif" />
+                <data android:pathPattern=".*\\..*\\.gif" />
+                <data android:pathPattern=".*\\..*\\..*\\.gif" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.gif" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.gif" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\.gif" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\..*\\..*\\.gif" />
             </intent-filter>
             <!-- Share actions -->
             <intent-filter android:label="@string/label_share_intent">
@@ -198,12 +249,14 @@
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="audio/*" />
                 <data android:mimeType="video/*" />
+                <data android:mimeType="image/*" />
             </intent-filter>
             <intent-filter android:label="@string/label_share_intent">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="audio/*" />
                 <data android:mimeType="video/*" />
+                <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
 
