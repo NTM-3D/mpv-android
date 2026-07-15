@@ -3,7 +3,7 @@
 This fork of mpv-android focuses on 3D playback for the Lume Pad 2.
 
 Video demo:  
-<a href="https://www.youtube.com/watch?v=0vEvsC6QhAA"><img src="https://img.youtube.com/vi/0vEvsC6QhAA/0.jpg" width="240">
+<a href="https://www.youtube.com/watch?v=1BVJc7-LFJU"><img src="https://img.youtube.com/vi/1BVJc7-LFJU/0.jpg" width="240">
 
 ## Credits
 
