@@ -3168,13 +3168,12 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubtitle3DCheck.setOnCheckedChangeListener { _, isChecked ->
             imageSubtitle3D = isChecked
 
-            // Default to Scale X of 1.0 is checked.
             if (isChecked) {
                 val progress = 9
                 // Move the slider visually
                 imageSubsScaleXSeekBar.progress = progress
                 // Trigger the same logic as if the user moved the slider
-                imageSubsScaleXSeekBarListener.onProgressChanged(
+                imageSubsScaleXListener.onProgressChanged(
                     imageSubsScaleXSeekBar,
                     progress,
                     true
