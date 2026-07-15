@@ -118,9 +118,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var subtitleSize = 0
     private var imageSubtitle3D = true
     private var imageSubtitleScale = 0
-    private var imageSubtitlePosition = 0
-    private var imageSubsScaleX = 0
-    private var imageSubsScaleY = 0
+    private var imageSubtitlePosition = 100
+    private var imageSubsScaleX = 10
+    private var imageSubsScaleY = 10
     private var currentFilePath = ""
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
@@ -2131,8 +2131,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             var resolvedFilename = MPVLib.getPropertyString("filename") ?: ""
             val path = MPVLib.getPropertyString("path") ?: ""
 
-            loadImageSubtitleSettingsForFile(path)
-
             if (path.startsWith("content://")) {
                 try {
                     val uri = Uri.parse(path)
@@ -2160,6 +2158,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
             //Log.d(debugTag, "Final filename passed to detectLeiaFormat: $resolvedFilename")
             val newFormat = detectLeiaFormat(resolvedFilename)
+            loadImageSubtitleSettingsForFile(path, newFormat)
             userForced3DOffForCurrentFile = false
             imageSubtitleDecoderFailedKey = null
             if (leiaEnabled && newFormat == LeiaFormat.NONE) {
@@ -2391,33 +2390,17 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
         MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive && imageSubtitle3D) osdKeepAspect else false)
 
-        // Apply correct stretch to mono image subtitles. The imageSubsScaleX/Y
-        // sliders (only usable when imageSubtitle3D is off, same as this whole
-        // stretch) are a user-adjustable multiplier on top of that automatic
-        // per-format base, defaulting to 1.0x (i.e. no change) so a file with
-        // no saved slider value gets exactly the previous automatic behavior.
-        val scaleXBase = when (format) {
-            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> 0.5
-            else -> 1.0
-        }
-
-        val scaleYBase = when (format) {
-            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> 0.5
-            else -> 1.0
-        }
-        val scaleX = scaleXBase * imageSubsScaleMultiplier(imageSubsScaleX)
-        val scaleY = scaleYBase * imageSubsScaleMultiplier(imageSubsScaleY)
+        // The imageSubsScaleX/Y sliders directly hold the value applied to
+        // image-subs-scale-x/y (stored in tenths, e.g. 5 = 0.5x). They're only
+        // usable when imageSubtitle3D is off, same as this whole stretch step.
+        // A file with no saved slider value defaults to the per-format
+        // auto-correct value (see defaultImageSubsScaleXTenths/YTenths).
+        val scaleX = imageSubsScaleX / 10.0
+        val scaleY = imageSubsScaleY / 10.0
         MPVLib.setOptionString("image-subs-scale-x", if (stereoActive && !imageSubtitle3D) scaleX.toString() else "1.0")
         MPVLib.setOptionString("image-subs-scale-y", if (stereoActive && !imageSubtitle3D) scaleY.toString() else "1.0")
 
         MPVLib.setPropertyString("video-aspect-override", "no")
-    }
-
-    // Maps the -15..15 imageSubsScaleX/Y slider range to a 0.5x-2.0x multiplier,
-    // with 0 (the default) mapping to 1.0x, i.e. no adjustment.
-    private fun imageSubsScaleMultiplier(slider: Int): Double {
-        val clamped = slider.coerceIn(-15, 15)
-        return 0.5 + (clamped + 15) / 30.0 * (2.0 - 0.5)
     }
 
     private fun isSbs3DActive(): Boolean {
@@ -2757,22 +2740,34 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     // Image subtitle settings are saved per opened file (like the last playback
     // position), rather than as a single global default, so each file remembers
     // its own values. A new/never-seen file falls back to the hardcoded defaults
-    // the fields are declared with.
+    // below - for the two stretch sliders, that default is the same per-format
+    // auto-correct value mpv previously computed on its own (0.5x for the axis
+    // that's squeezed by SBS/TAB packing, 1.0x otherwise).
     private fun imageSubtitlePerFileKey(path: String): String {
         val digest = java.security.MessageDigest.getInstance("MD5").digest(path.toByteArray())
         return digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     }
 
-    private fun loadImageSubtitleSettingsForFile(path: String) {
+    private fun defaultImageSubsScaleXTenths(format: LeiaFormat): Int = when (format) {
+        LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> 5
+        else -> 10
+    }
+
+    private fun defaultImageSubsScaleYTenths(format: LeiaFormat): Int = when (format) {
+        LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> 5
+        else -> 10
+    }
+
+    private fun loadImageSubtitleSettingsForFile(path: String, format: LeiaFormat) {
         currentFilePath = path
         if (path.isEmpty()) return
         val prefs = getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE)
         val key = imageSubtitlePerFileKey(path)
         imageSubtitle3D = prefs.getBoolean("${key}_3d", true)
         imageSubtitleScale = prefs.getInt("${key}_scale", 0).coerceIn(-15, 15)
-        imageSubtitlePosition = prefs.getInt("${key}_position", 0).coerceIn(-15, 15)
-        imageSubsScaleX = prefs.getInt("${key}_scale_x", 0).coerceIn(-15, 15)
-        imageSubsScaleY = prefs.getInt("${key}_scale_y", 0).coerceIn(-15, 15)
+        imageSubtitlePosition = prefs.getInt("${key}_position", 100).coerceIn(50, 150)
+        imageSubsScaleX = prefs.getInt("${key}_scale_x", defaultImageSubsScaleXTenths(format)).coerceIn(1, 30)
+        imageSubsScaleY = prefs.getInt("${key}_scale_y", defaultImageSubsScaleYTenths(format)).coerceIn(1, 30)
     }
 
     private fun persistImageSubtitle3D() {
@@ -2843,10 +2838,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     }
 
     private fun applyImageSubtitlePosition(position: Int) {
-        val clamped = position.coerceIn(-15, 15)
-        // Map -15..15 (30 steps) to 60..150
-        val normalized = 60 + (clamped + 15) * (150 - 60) / 30
-        MPVLib.setPropertyInt("sub-pos", normalized)
+        MPVLib.setPropertyInt("sub-pos", position.coerceIn(50, 150))
     }
 
     private fun guessNetworkSubtitles(filepath: String) {
@@ -3040,12 +3032,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val normalized = 0.1 + (slider + 15) / 30.0 * (3.0 - 0.1)
             return String.format("%.1f", normalized)
         }
-        fun formatImageSubtitlePosition(slider: Int): String {
-            val normalized = 60 + (slider + 15) * (150 - 60) / 30
-            return "$normalized"
+        fun formatImageSubtitlePosition(position: Int): String {
+            return "$position"
         }
-        fun formatImageSubsScale(slider: Int): String {
-            return String.format("%.1fx", imageSubsScaleMultiplier(slider))
+        fun formatImageSubsScale(tenths: Int): String {
+            return String.format("%.1fx", tenths / 10.0)
         }
         fun setImageSubtitleScaleEnabled(enabled: Boolean) {
             imageSubtitleScaleLabel.isEnabled = enabled
@@ -3062,11 +3053,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubtitle3DCheck.isChecked = imageSubtitle3D
         imageSubtitleScaleSeekBar.progress = imageSubtitleScale + 15
         imageSubtitleScaleValue.text = formatImageSubtitleScale(imageSubtitleScale)
-        imageSubtitlePositionSeekBar.progress = imageSubtitlePosition + 15
+        imageSubtitlePositionSeekBar.progress = imageSubtitlePosition - 50
         imageSubtitlePositionValue.text = formatImageSubtitlePosition(imageSubtitlePosition)
-        imageSubsScaleXSeekBar.progress = imageSubsScaleX + 15
+        imageSubsScaleXSeekBar.progress = imageSubsScaleX - 1
         imageSubsScaleXValue.text = formatImageSubsScale(imageSubsScaleX)
-        imageSubsScaleYSeekBar.progress = imageSubsScaleY + 15
+        imageSubsScaleYSeekBar.progress = imageSubsScaleY - 1
         imageSubsScaleYValue.text = formatImageSubsScale(imageSubsScaleY)
         setImageSubtitleScaleEnabled(!imageSubtitle3D)
 
@@ -3147,7 +3138,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitlePositionSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                val position = progress - 15
+                val position = progress + 50
                 imageSubtitlePositionValue.text = formatImageSubtitlePosition(position)
                 if (fromUser) {
                     imageSubtitlePosition = position
@@ -3161,10 +3152,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubsScaleXSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                val slider = progress - 15
-                imageSubsScaleXValue.text = formatImageSubsScale(slider)
+                val tenths = progress + 1
+                imageSubsScaleXValue.text = formatImageSubsScale(tenths)
                 if (fromUser) {
-                    imageSubsScaleX = slider
+                    imageSubsScaleX = tenths
                     applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
                     persistImageSubsScaleX()
                 }
@@ -3175,10 +3166,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubsScaleYSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                val slider = progress - 15
-                imageSubsScaleYValue.text = formatImageSubsScale(slider)
+                val tenths = progress + 1
+                imageSubsScaleYValue.text = formatImageSubsScale(tenths)
                 if (fromUser) {
-                    imageSubsScaleY = slider
+                    imageSubsScaleY = tenths
                     applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
                     persistImageSubsScaleY()
                 }

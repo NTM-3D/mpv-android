@@ -52,8 +52,8 @@
     <string name="label_image_subtitle_3d">3D Subtitle</string>
     <string name="label_image_subtitle_scale">Scale</string>
     <string name="label_image_subtitle_position">Position</string>
-    <string name="label_image_subs_scale_x">Stretch X</string>
-    <string name="label_image_subs_scale_y">Stretch Y</string>
+    <string name="label_image_subs_scale_x">Scale X</string>
+    <string name="label_image_subs_scale_y">Scale Y</string>
     <string name="error_no_file">No file given, exiting</string>
     <string name="notice_file_appended">File(s) appended to playlist</string>
     <string name="notice_file_play">Starting playback of file(s)</string>
