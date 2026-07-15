@@ -2918,12 +2918,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "GET"   
             connection.connectTimeout = 300 // 300ms is very short, ideal for localhost
-            connection.readTimeout = 300
-            
+            connection.readTimeout = 300            
             var code = connection.responseCode
             connection.disconnect()
 
-            Log.d(TAG, "guessNetworkSubtitles: Code: $code URL: $url")
+            //Log.d(TAG, "guessNetworkSubtitles: Code: $code URL: $url")
 
             // 200 OK or 206 Partial Content means the file exists
             code == 200 || code == 206
