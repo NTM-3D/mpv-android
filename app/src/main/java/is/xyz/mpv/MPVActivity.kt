@@ -113,6 +113,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var leiaEnabled = false
     private var loggedFirstImageSubtitleFrame = false
     private var currentLeiaFormat = LeiaFormat.NONE
+    private var swapEyes = false
     private var subtitleDepth = 0
     private var subtitlePosition = 0
     private var subtitleSize = 0
@@ -2769,6 +2770,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubtitlePosition = prefs.getInt("${key}_position", 100).coerceIn(50, 150)
         imageSubsScaleX = prefs.getInt("${key}_scale_x", defaultImageSubsScaleXTenths(format)).coerceIn(1, 30)
         imageSubsScaleY = prefs.getInt("${key}_scale_y", defaultImageSubsScaleYTenths(format)).coerceIn(1, 30)
+        
+        // Load and apply swap eyes
+        swapEyes = prefs.getBoolean("${key}_swap_eyes", false)
+        player.setSwapImages(swapEyes)
     }
 
     private fun persistImageSubtitle3D() {
@@ -2804,6 +2809,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
             .putInt("${imageSubtitlePerFileKey(currentFilePath)}_scale_y", imageSubsScaleY)
             .apply()
+    }
+
+    private fun persistImageSubtitleSwapEyes() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+        .putBoolean("${imageSubtitlePerFileKey(currentFilePath)}_swap_eyes", swapEyes)
+        .apply()
     }
 
     // Which mpv vf=format:stereo-in=<x> value matches the current 3D packing,
@@ -3068,9 +3080,12 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubsScaleYValue.text = formatImageSubsScale(imageSubsScaleY)
         setImageSubtitleScaleEnabled(!imageSubtitle3D)
 
-        swapEyesCheck.isChecked = player.getSwapImages()
+        // Change initialization and listener:
+        swapEyesCheck.isChecked = swapEyes
         swapEyesCheck.setOnCheckedChangeListener { _, isChecked ->
+            swapEyes = isChecked
             player.setSwapImages(isChecked)
+            persistImageSubtitleSwapEyes()
         }
 
         depthSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
@@ -3209,11 +3224,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 imageSubtitlePosition = imageSubtitlePositionSeekBar.progress + 50
                 imageSubsScaleX = imageSubsScaleXSeekBar.progress + 1
                 imageSubsScaleY = imageSubsScaleYSeekBar.progress + 1
+                swapEyes = swapEyesCheck.isChecked
                 persistImageSubtitle3D()
                 persistImageSubtitleScale()
                 persistImageSubtitlePosition()
                 persistImageSubsScaleX()
                 persistImageSubsScaleY()
+                persistImageSubtitleSwapEyes()
                 apply3DMode(newFormat)
                 restore()
             }
