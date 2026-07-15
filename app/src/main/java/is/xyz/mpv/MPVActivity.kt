@@ -3170,6 +3170,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
             if (isChecked) {
                 imageSubsScaleXSeekBar.progress = 9
+                imageSubsScaleX = 9
             }
 
             applyImageSubtitleStereoMode()
