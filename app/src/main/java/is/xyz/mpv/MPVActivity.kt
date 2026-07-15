@@ -119,6 +119,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var imageSubtitle3D = true
     private var imageSubtitleScale = 0
     private var imageSubtitlePosition = 0
+    private var imageSubsScaleX = 0
+    private var imageSubsScaleY = 0
+    private var currentFilePath = ""
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
     private var hasGuessedNetworkSubtitles = false
@@ -598,9 +601,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         this.subtitleDepth = prefs.getInt("subtitle_depth_3d", 0).coerceIn(-15, 15)
         this.subtitlePosition = prefs.getInt("subtitle_position_3d", 0).coerceIn(-15, 15)
         this.subtitleSize = prefs.getInt("subtitle_size_3d", 0).coerceIn(-15, 15)
-        this.imageSubtitle3D = prefs.getBoolean("image_subtitle_3d", true)
-        this.imageSubtitleScale = prefs.getInt("image_subtitle_scale_3d", 0).coerceIn(-15, 15)
-        this.imageSubtitlePosition = prefs.getInt("image_subtitle_position_3d", 0).coerceIn(-15, 15)
         this.ignoreAudioFocus = prefs.getBoolean("ignore_audio_focus", false)
         this.playlistExitWarning = prefs.getBoolean("playlist_exit_warning", true)
         this.newIntentReplace = prefs.getBoolean("new_intent_replace", false)
@@ -2131,6 +2131,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             var resolvedFilename = MPVLib.getPropertyString("filename") ?: ""
             val path = MPVLib.getPropertyString("path") ?: ""
 
+            loadImageSubtitleSettingsForFile(path)
+
             if (path.startsWith("content://")) {
                 try {
                     val uri = Uri.parse(path)
@@ -2332,6 +2334,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         private const val STREAM_TYPE = AudioManager.STREAM_MUSIC
         // precision used by seekbar (1/s)
         private const val SEEK_BAR_PRECISION = 2
+        // SharedPreferences file used to save image subtitle settings per opened file
+        private const val IMAGE_SUBTITLE_PER_FILE_PREFS = "image_subtitle_per_file"
     }
 
     private fun InitLeia(context: Context) {
@@ -2387,20 +2391,33 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
         MPVLib.setPropertyBoolean("osd-keepaspect", if (stereoActive && imageSubtitle3D) osdKeepAspect else false)
 
-        // Apply correct stretch to mono image subtitles.
-        val scaleX = when (format) {
-            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> "0.5"
-            else -> "1.0"
+        // Apply correct stretch to mono image subtitles. The imageSubsScaleX/Y
+        // sliders (only usable when imageSubtitle3D is off, same as this whole
+        // stretch) are a user-adjustable multiplier on top of that automatic
+        // per-format base, defaulting to 1.0x (i.e. no change) so a file with
+        // no saved slider value gets exactly the previous automatic behavior.
+        val scaleXBase = when (format) {
+            LeiaFormat.HALF_SBS, LeiaFormat.FULL_SBS -> 0.5
+            else -> 1.0
         }
 
-        val scaleY = when (format) {
-            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "0.5"
-            else -> "1.0"
+        val scaleYBase = when (format) {
+            LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> 0.5
+            else -> 1.0
         }
-        MPVLib.setOptionString("image-subs-scale-x", if (stereoActive && !imageSubtitle3D) scaleX else "1.0")
-        MPVLib.setOptionString("image-subs-scale-y", if (stereoActive && !imageSubtitle3D) scaleY else "1.0")
+        val scaleX = scaleXBase * imageSubsScaleMultiplier(imageSubsScaleX)
+        val scaleY = scaleYBase * imageSubsScaleMultiplier(imageSubsScaleY)
+        MPVLib.setOptionString("image-subs-scale-x", if (stereoActive && !imageSubtitle3D) scaleX.toString() else "1.0")
+        MPVLib.setOptionString("image-subs-scale-y", if (stereoActive && !imageSubtitle3D) scaleY.toString() else "1.0")
 
         MPVLib.setPropertyString("video-aspect-override", "no")
+    }
+
+    // Maps the -15..15 imageSubsScaleX/Y slider range to a 0.5x-2.0x multiplier,
+    // with 0 (the default) mapping to 1.0x, i.e. no adjustment.
+    private fun imageSubsScaleMultiplier(slider: Int): Double {
+        val clamped = slider.coerceIn(-15, 15)
+        return 0.5 + (clamped + 15) / 30.0 * (2.0 - 0.5)
     }
 
     private fun isSbs3DActive(): Boolean {
@@ -2737,21 +2754,59 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             .apply()
     }
 
+    // Image subtitle settings are saved per opened file (like the last playback
+    // position), rather than as a single global default, so each file remembers
+    // its own values. A new/never-seen file falls back to the hardcoded defaults
+    // the fields are declared with.
+    private fun imageSubtitlePerFileKey(path: String): String {
+        val digest = java.security.MessageDigest.getInstance("MD5").digest(path.toByteArray())
+        return digest.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }
+
+    private fun loadImageSubtitleSettingsForFile(path: String) {
+        currentFilePath = path
+        if (path.isEmpty()) return
+        val prefs = getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE)
+        val key = imageSubtitlePerFileKey(path)
+        imageSubtitle3D = prefs.getBoolean("${key}_3d", true)
+        imageSubtitleScale = prefs.getInt("${key}_scale", 0).coerceIn(-15, 15)
+        imageSubtitlePosition = prefs.getInt("${key}_position", 0).coerceIn(-15, 15)
+        imageSubsScaleX = prefs.getInt("${key}_scale_x", 0).coerceIn(-15, 15)
+        imageSubsScaleY = prefs.getInt("${key}_scale_y", 0).coerceIn(-15, 15)
+    }
+
     private fun persistImageSubtitle3D() {
-        getDefaultSharedPreferences(applicationContext).edit()
-            .putBoolean("image_subtitle_3d", imageSubtitle3D)
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putBoolean("${imageSubtitlePerFileKey(currentFilePath)}_3d", imageSubtitle3D)
             .apply()
     }
 
     private fun persistImageSubtitleScale() {
-        getDefaultSharedPreferences(applicationContext).edit()
-            .putInt("image_subtitle_scale_3d", imageSubtitleScale)
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putInt("${imageSubtitlePerFileKey(currentFilePath)}_scale", imageSubtitleScale)
             .apply()
     }
 
     private fun persistImageSubtitlePosition() {
-        getDefaultSharedPreferences(applicationContext).edit()
-            .putInt("image_subtitle_position_3d", imageSubtitlePosition)
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putInt("${imageSubtitlePerFileKey(currentFilePath)}_position", imageSubtitlePosition)
+            .apply()
+    }
+
+    private fun persistImageSubsScaleX() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putInt("${imageSubtitlePerFileKey(currentFilePath)}_scale_x", imageSubsScaleX)
+            .apply()
+    }
+
+    private fun persistImageSubsScaleY() {
+        if (currentFilePath.isEmpty()) return
+        getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE).edit()
+            .putInt("${imageSubtitlePerFileKey(currentFilePath)}_scale_y", imageSubsScaleY)
             .apply()
     }
 
@@ -2955,6 +3010,12 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val imageSubtitlePositionLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitlePositionLabel)
         val imageSubtitlePositionSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.imageSubtitlePositionSeekBar)
         val imageSubtitlePositionValue = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitlePositionValue)
+        val imageSubsScaleXLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubsScaleXLabel)
+        val imageSubsScaleXSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.imageSubsScaleXSeekBar)
+        val imageSubsScaleXValue = dialogView.findViewById<android.widget.TextView>(R.id.imageSubsScaleXValue)
+        val imageSubsScaleYLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubsScaleYLabel)
+        val imageSubsScaleYSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.imageSubsScaleYSeekBar)
+        val imageSubsScaleYValue = dialogView.findViewById<android.widget.TextView>(R.id.imageSubsScaleYValue)
 
         // Set initial radio selection from current format
         when (currentLeiaFormat) {
@@ -2983,10 +3044,19 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             val normalized = 60 + (slider + 15) * (150 - 60) / 30
             return "$normalized"
         }
+        fun formatImageSubsScale(slider: Int): String {
+            return String.format("%.1fx", imageSubsScaleMultiplier(slider))
+        }
         fun setImageSubtitleScaleEnabled(enabled: Boolean) {
             imageSubtitleScaleLabel.isEnabled = enabled
             imageSubtitleScaleSeekBar.isEnabled = enabled
             imageSubtitleScaleValue.isEnabled = enabled
+            imageSubsScaleXLabel.isEnabled = enabled
+            imageSubsScaleXSeekBar.isEnabled = enabled
+            imageSubsScaleXValue.isEnabled = enabled
+            imageSubsScaleYLabel.isEnabled = enabled
+            imageSubsScaleYSeekBar.isEnabled = enabled
+            imageSubsScaleYValue.isEnabled = enabled
         }
 
         imageSubtitle3DCheck.isChecked = imageSubtitle3D
@@ -2994,6 +3064,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         imageSubtitleScaleValue.text = formatImageSubtitleScale(imageSubtitleScale)
         imageSubtitlePositionSeekBar.progress = imageSubtitlePosition + 15
         imageSubtitlePositionValue.text = formatImageSubtitlePosition(imageSubtitlePosition)
+        imageSubsScaleXSeekBar.progress = imageSubsScaleX + 15
+        imageSubsScaleXValue.text = formatImageSubsScale(imageSubsScaleX)
+        imageSubsScaleYSeekBar.progress = imageSubsScaleY + 15
+        imageSubsScaleYValue.text = formatImageSubsScale(imageSubsScaleY)
         setImageSubtitleScaleEnabled(!imageSubtitle3D)
 
         swapEyesCheck.isChecked = player.getSwapImages()
@@ -3053,6 +3127,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             } else {
                 applyImageSubtitleScale(imageSubtitleScale)
             }
+            applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
             persistImageSubtitle3D()
         }
 
@@ -3084,6 +3159,34 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
         })
 
+        imageSubsScaleXSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val slider = progress - 15
+                imageSubsScaleXValue.text = formatImageSubsScale(slider)
+                if (fromUser) {
+                    imageSubsScaleX = slider
+                    applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+                    persistImageSubsScaleX()
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
+        imageSubsScaleYSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                val slider = progress - 15
+                imageSubsScaleYValue.text = formatImageSubsScale(slider)
+                if (fromUser) {
+                    imageSubsScaleY = slider
+                    applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
+                    persistImageSubsScaleY()
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+
         lateinit var dialog: AlertDialog
         dialog = with(AlertDialog.Builder(this)) {
             setTitle(R.string.title_3d_dialog)
@@ -3106,9 +3209,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
                 imageSubtitle3D = imageSubtitle3DCheck.isChecked
                 imageSubtitleScale = imageSubtitleScaleSeekBar.progress - 15
                 imageSubtitlePosition = imageSubtitlePositionSeekBar.progress - 15
+                imageSubsScaleX = imageSubsScaleXSeekBar.progress - 15
+                imageSubsScaleY = imageSubsScaleYSeekBar.progress - 15
                 persistImageSubtitle3D()
                 persistImageSubtitleScale()
                 persistImageSubtitlePosition()
+                persistImageSubsScaleX()
+                persistImageSubsScaleY()
                 apply3DMode(newFormat)
                 restore()
             }
@@ -3118,9 +3225,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
         dialog.show()
         dialog.window?.decorView?.post {
-            val currentWidth = dialog.window?.decorView?.width ?: 0
-            if (currentWidth > 0)
-                dialog.window?.setLayout((currentWidth * 2) / 3, WindowManager.LayoutParams.WRAP_CONTENT)
+            val screenWidth = resources.displayMetrics.widthPixels
+            val desiredWidth = Utils.convertDp(this, 820f)
+            val maxWidth = (screenWidth * 0.95f).toInt()
+            dialog.window?.setLayout(minOf(desiredWidth, maxWidth), WindowManager.LayoutParams.WRAP_CONTENT)
         }
     }
 
