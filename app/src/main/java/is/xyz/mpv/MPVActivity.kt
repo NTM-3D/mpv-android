@@ -3051,13 +3051,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         imageSubtitle3DCheck.isChecked = imageSubtitle3D
-        imageSubtitleScaleSeekBar.progress = imageSubtitleScale + 15
+        imageSubtitleScaleSeekBar.progress = imageSubtitleScale
         imageSubtitleScaleValue.text = formatImageSubtitleScale(imageSubtitleScale)
         imageSubtitlePositionSeekBar.progress = imageSubtitlePosition
         imageSubtitlePositionValue.text = formatImageSubtitlePosition(imageSubtitlePosition)
-        imageSubsScaleXSeekBar.progress = imageSubsScaleX - 1
+        imageSubsScaleXSeekBar.progress = imageSubsScaleX
         imageSubsScaleXValue.text = formatImageSubsScale(imageSubsScaleX)
-        imageSubsScaleYSeekBar.progress = imageSubsScaleY - 1
+        imageSubsScaleYSeekBar.progress = imageSubsScaleY
         imageSubsScaleYValue.text = formatImageSubsScale(imageSubsScaleY)
         setImageSubtitleScaleEnabled(!imageSubtitle3D)
 
@@ -3138,7 +3138,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitlePositionSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                val position = progress + 50
+                val position = progress
                 imageSubtitlePositionValue.text = formatImageSubtitlePosition(position)
                 if (fromUser) {
                     imageSubtitlePosition = position
