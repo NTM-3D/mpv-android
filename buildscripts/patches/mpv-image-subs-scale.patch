@@ -46,6 +46,13 @@ diff --git a/sub/sd_lavc.c b/sub/sd_lavc.c
 -            struct sub_bitmap *sub = &res->parts[n];
 -
 -            float shit = (opts->sub_scale - 1.0f) / 2;
+-
+-            // Fortunately VO isn't supposed to give a FUCKING FUCK about
+-            // whether the sub might e.g. go outside of the screen.
+-            sub->x -= sub->dw * shit;
+-            sub->y -= sub->dh * shit;
+-            sub->dw += sub->dw * shit * 2;
+-            sub->dh += sub->dh * shit * 2;
 +    if (shared_opts->ass_style_override[sd->order]) {
 +        if (opts->image_subs_scale != 1.0 || opts->image_subs_scale_x != 1.0 ||
 +            opts->image_subs_scale_y != 1.0) {
@@ -59,13 +66,7 @@ diff --git a/sub/sd_lavc.c b/sub/sd_lavc.c
 +                    shit_x = (opts->image_subs_scale_x - 1.0f) / 2;
 +                    shit_y = (opts->image_subs_scale_y - 1.0f) / 2;
 +                }
- 
--            // Fortunately VO isn't supposed to give a FUCKING FUCK about
--            // whether the sub might e.g. go outside of the screen.
--            sub->x -= sub->dw * shit;
--            sub->y -= sub->dh * shit;
--            sub->dw += sub->dw * shit * 2;
--            sub->dh += sub->dh * shit * 2;
++
 +                // Fortunately VO isn't supposed to give a FUCKING FUCK about
 +                // whether the sub might e.g. go outside of the screen.
 +                sub->x -= sub->dw * shit_x;
@@ -75,3 +76,4 @@ diff --git a/sub/sd_lavc.c b/sub/sd_lavc.c
 +            }
          }
      }
+ 
