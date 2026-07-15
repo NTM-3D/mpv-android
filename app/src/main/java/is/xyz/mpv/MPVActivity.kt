@@ -3114,8 +3114,14 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // is currently selected, not on the "3D subtitle" checkbox.
         val imageSubtitleTrackActive = isImageSubtitleTrackSelected()
         val textSubtitleTrackActive = player.sid != -1 && !imageSubtitleTrackActive
-        setTextSubtitleSlidersEnabled(!imageSubtitleTrackActive)
-        setImageSubtitleSlidersEnabled(!textSubtitleTrackActive)
+        if (!textSubtitleTrackActive && !imageSubtitleTrackActive) {
+            setTextSubtitleSlidersEnabled(false)
+            setImageSubtitleSlidersEnabled(false)
+        } else {
+            setTextSubtitleSlidersEnabled(!imageSubtitleTrackActive)
+            setImageSubtitleSlidersEnabled(!textSubtitleTrackActive)
+        }
+        
 
         // Change initialization and listener:
         swapEyesCheck.isChecked = swapEyes
