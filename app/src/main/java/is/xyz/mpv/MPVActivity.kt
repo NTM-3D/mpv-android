@@ -119,7 +119,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var imageSubtitle3D = true
     private var imageSubtitleScale = 0
     private var imageSubtitlePosition = 0
-    private var lastAppliedStereoInFilter: String? = null
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
     private var hasGuessedNetworkSubtitles = false
@@ -2741,13 +2740,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             .apply()
     }
 
-    private fun applyStereoInFilter(stereoIn: String) {
-        if (stereoIn == lastAppliedStereoInFilter)
-            return
-        lastAppliedStereoInFilter = stereoIn
-        MPVLib.command(arrayOf("vf", "set", "format:stereo-in=$stereoIn"))
-    }
-
     // Which mpv vf=format:stereo-in=<x> value matches the current 3D packing,
     // for mono image subtitles that need to be duplicated into both eyes.
     private fun currentStereoInFilterValue(): String {
@@ -2762,9 +2754,15 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     // not be duplicated again (stereo-in=none). Mono ones need duplicating
     // to match the current SBS/TAB packing, same as apply3DMode() does for
     // the video itself.
+    //
+    // Uses the "vf set" runtime command rather than setOptionString: the
+    // latter doesn't reliably replace an already-active filter chain during
+    // playback (the previous sbs2l/ab2l filter stayed active even after
+    // switching back to stereo-in=none), whereas "vf set" is mpv's
+    // documented mechanism for atomically replacing the whole filter chain.
     private fun applyImageSubtitleStereoMode() {
         val stereoIn = if (imageSubtitle3D) "no" else currentStereoInFilterValue()
-        applyStereoInFilter(stereoIn)
+        MPVLib.setOptionString("vf", "format:stereo-in=$stereoIn")
     }
 
     private fun applyImageSubtitleScale(scale: Int) {
@@ -2842,7 +2840,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         if (!shouldEnableStereoSubs) {
             MPVLib.setPropertyBoolean("sub-visibility", true)
-            MPVLib.command(arrayOf("vf", "set", "format:stereo-in=no"))
+            MPVLib.setOptionString("vf", "format:stereo-in=no")
             MPVLib.setPropertyDouble("sub-scale", 1.0)
             MPVLib.setPropertyInt("sub-pos", 100)
             player.setStereoSubtitleEnabled(false)
@@ -2884,7 +2882,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         MPVLib.setPropertyBoolean("sub-visibility", false)
-        MPVLib.command(arrayOf("vf", "set", "format:stereo-in=no"))
+        MPVLib.setOptionString("vf", "format:stereo-in=no")
         MPVLib.setPropertyDouble("sub-scale", 1.0)
         MPVLib.setPropertyInt("sub-pos", 100)
         player.setStereoSubtitleEnabled(true)
