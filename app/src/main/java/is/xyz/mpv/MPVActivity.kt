@@ -119,6 +119,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var imageSubtitle3D = true
     private var imageSubtitleScale = 0
     private var imageSubtitlePosition = 0
+    private var lastAppliedStereoInFilter: String? = null
     private var currentSubText = ""
     private var stereoSubtitleModeEnabled = false
     private var hasGuessedNetworkSubtitles = false
@@ -2740,6 +2741,17 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             .apply()
     }
 
+    // "vf set" fully rebuilds mpv's filter chain — expensive, and
+    // updateStereoSubtitleMode() runs on every relevant property change
+    // (many times a second during normal playback), so only actually issue
+    // the command when the target value changes, not on every call.
+    private fun applyStereoInFilter(stereoIn: String) {
+        if (stereoIn == lastAppliedStereoInFilter)
+            return
+        lastAppliedStereoInFilter = stereoIn
+        MPVLib.command(arrayOf("vf", "set", "format:stereo-in=$stereoIn"))
+    }
+
     // Which mpv vf=format:stereo-in=<x> value matches the current 3D packing,
     // for mono image subtitles that need to be duplicated into both eyes.
     private fun currentStereoInFilterValue(): String {
@@ -2762,7 +2774,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     // documented mechanism for atomically replacing the whole filter chain.
     private fun applyImageSubtitleStereoMode() {
         val stereoIn = if (imageSubtitle3D) "none" else currentStereoInFilterValue()
-        MPVLib.command(arrayOf("vf", "set", "format:stereo-in=$stereoIn"))
+        applyStereoInFilter(stereoIn)
     }
 
     private fun applyImageSubtitleScale(scale: Int) {
