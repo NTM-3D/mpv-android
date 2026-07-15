@@ -2397,8 +2397,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             LeiaFormat.HALF_TAB, LeiaFormat.FULL_TAB -> "2.0"
             else -> "1.0"
         }
-        MPVLib.setOptionString("image-subs-scale-x", scaleX)
-        MPVLib.setOptionString("image-subs-scale-y", scaleY)
+        MPVLib.setOptionString("image-subs-scale-x", if (stereoActive && !imageSubtitle3D) scaleX else "1.0")
+        MPVLib.setOptionString("image-subs-scale-y", if (stereoActive && !imageSubtitle3D) scaleY else "1.0")
 
         MPVLib.setPropertyString("video-aspect-override", "no")
     }
