@@ -2764,7 +2764,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val prefs = getSharedPreferences(IMAGE_SUBTITLE_PER_FILE_PREFS, MODE_PRIVATE)
         val key = imageSubtitlePerFileKey(path)
         imageSubtitle3D = prefs.getBoolean("${key}_3d", true)
-        imageSubtitleScale = prefs.getInt("${key}_scale", -6).coerceIn(-15, 15)
+        imageSubtitleScale = prefs.getInt("${key}_scale", 0).coerceIn(-15, 15)
         imageSubtitlePosition = prefs.getInt("${key}_position", 100).coerceIn(50, 150)
         imageSubsScaleX = prefs.getInt("${key}_scale_x", defaultImageSubsScaleXTenths(format)).coerceIn(1, 30)
         imageSubsScaleY = prefs.getInt("${key}_scale_y", defaultImageSubsScaleYTenths(format)).coerceIn(1, 30)
@@ -2830,11 +2830,18 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         MPVLib.setOptionString("vf", "format:stereo-in=$stereoIn")
     }
 
+    private fun mapImageSubtitleScale(slider: Int): Double {
+        val clamped = slider.coerceIn(-15, 15)
+        // Piecewise linear mapping: -15 -> 0.1, 0 -> 1.0, 15 -> 3.0
+        return if (clamped <= 0) {
+            0.1 + (clamped + 15) / 15.0 * 0.9
+        } else {
+            1.0 + clamped / 15.0 * 2.0
+        }
+    }
+
     private fun applyImageSubtitleScale(scale: Int) {
-        val clamped = scale.coerceIn(-15, 15)
-        // Map -15..15 (30 steps) to 0.1..3.0
-        val normalized = 0.1 + (clamped + 15) / 30.0 * (3.0 - 0.1)
-        MPVLib.setPropertyDouble("sub-scale", normalized)
+        MPVLib.setPropertyDouble("sub-scale", mapImageSubtitleScale(scale))
     }
 
     private fun applyImageSubtitlePosition(position: Int) {
@@ -3029,8 +3036,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         sizeValue.text = if (subtitleSize >= 0) "+$subtitleSize" else "$subtitleSize"
 
         fun formatImageSubtitleScale(slider: Int): String {
-            val normalized = 0.1 + (slider + 15) / 30.0 * (3.0 - 0.1)
-            return String.format("%.1f", normalized)
+            return String.format("%.1f", mapImageSubtitleScale(slider))
         }
         fun formatImageSubtitlePosition(position: Int): String {
             return "$position"
