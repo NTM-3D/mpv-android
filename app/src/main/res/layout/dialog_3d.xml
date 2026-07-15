@@ -1,58 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
+    android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:padding="16dp">
 
     <!-- Top Section: Mode + Swap Eyes -->
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-        <LinearLayout
-            android:layout_width="0dp"
+        <RadioGroup
+            android:id="@+id/modeGroup"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:orientation="vertical">
 
-            <RadioGroup
-                android:id="@+id/modeGroup"
-                android:layout_width="match_parent"
+            <RadioButton
+                android:id="@+id/modeFullSbs"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
+                android:text="@string/mode_full_sbs" />
 
-                <RadioButton
-                    android:id="@+id/modeFullSbs"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/mode_full_sbs" />
+            <RadioButton
+                android:id="@+id/modeHalfSbs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mode_half_sbs" />
 
-                <RadioButton
-                    android:id="@+id/modeHalfSbs"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/mode_half_sbs" />
+            <RadioButton
+                android:id="@+id/modeFullTab"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mode_full_tab" />
 
-                <RadioButton
-                    android:id="@+id/modeFullTab"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/mode_full_tab" />
-
-                <RadioButton
-                    android:id="@+id/modeHalfTab"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/mode_half_tab" />
-            </RadioGroup>
-        </LinearLayout>
+            <RadioButton
+                android:id="@+id/modeHalfTab"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mode_half_tab" />
+        </RadioGroup>
 
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="16dp"
             android:orientation="vertical"
             android:gravity="center_horizontal"
             android:paddingTop="6dp">
@@ -81,17 +75,16 @@
 
     <!-- Side-by-Side Subtitle Sections -->
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
-        <!-- Text Subtitle Section -->
+        <!-- Text Subtitle Section (Left Column) -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:orientation="vertical"
-            android:paddingEnd="8dp">
+            android:paddingEnd="12dp">
 
             <TextView
                 android:layout_width="match_parent"
@@ -109,7 +102,7 @@
                 android:textAppearance="?android:attr/textAppearanceSmall" />
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:orientation="horizontal"
@@ -117,9 +110,8 @@
 
                 <SeekBar
                     android:id="@+id/depthSeekBar"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:max="30"
                     android:progress="15" />
 
@@ -127,6 +119,7 @@
                     android:id="@+id/depthValue"
                     android:layout_width="40dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:gravity="end"
                     android:text="0"
                     android:textAppearance="?android:attr/textAppearanceSmall" />
@@ -141,7 +134,7 @@
                 android:textAppearance="?android:attr/textAppearanceSmall" />
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:orientation="horizontal"
@@ -149,9 +142,8 @@
 
                 <SeekBar
                     android:id="@+id/positionSeekBar"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:max="30"
                     android:progress="15" />
 
@@ -159,6 +151,7 @@
                     android:id="@+id/positionValue"
                     android:layout_width="40dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:gravity="end"
                     android:text="0"
                     android:textAppearance="?android:attr/textAppearanceSmall" />
@@ -173,7 +166,7 @@
                 android:textAppearance="?android:attr/textAppearanceSmall" />
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:orientation="horizontal"
@@ -181,9 +174,8 @@
 
                 <SeekBar
                     android:id="@+id/sizeSeekBar"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:max="30"
                     android:progress="15" />
 
@@ -191,6 +183,7 @@
                     android:id="@+id/sizeValue"
                     android:layout_width="40dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:gravity="end"
                     android:text="0"
                     android:textAppearance="?android:attr/textAppearanceSmall" />
@@ -205,13 +198,12 @@
             android:layout_marginBottom="4dp"
             android:background="?android:attr/listDivider" />
 
-        <!-- Image Subtitle Section -->
+        <!-- Image Subtitle Section (Right Column) -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:orientation="vertical"
-            android:paddingStart="8dp">
+            android:paddingStart="12dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -220,9 +212,8 @@
                 android:gravity="center_vertical">
 
                 <TextView
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="@string/title_image_subtitle_section"
                     android:textAppearance="?android:attr/textAppearanceMedium"
                     android:textStyle="bold" />
@@ -230,6 +221,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:layout_marginEnd="4dp"
                     android:text="@string/label_image_subtitle_3d"
                     android:textAppearance="?android:attr/textAppearanceSmall" />
@@ -251,7 +243,7 @@
                 android:textAppearance="?android:attr/textAppearanceSmall" />
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:orientation="horizontal"
@@ -259,9 +251,8 @@
 
                 <SeekBar
                     android:id="@+id/imageSubtitleScaleSeekBar"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:max="30"
                     android:progress="15" />
 
@@ -269,6 +260,7 @@
                     android:id="@+id/imageSubtitleScaleValue"
                     android:layout_width="40dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:gravity="end"
                     android:text="0"
                     android:textAppearance="?android:attr/textAppearanceSmall" />
@@ -283,7 +275,7 @@
                 android:textAppearance="?android:attr/textAppearanceSmall" />
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:orientation="horizontal"
@@ -291,9 +283,8 @@
 
                 <SeekBar
                     android:id="@+id/imageSubtitlePositionSeekBar"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:max="30"
                     android:progress="15" />
 
@@ -301,6 +292,7 @@
                     android:id="@+id/imageSubtitlePositionValue"
                     android:layout_width="40dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:gravity="end"
                     android:text="0"
                     android:textAppearance="?android:attr/textAppearanceSmall" />
