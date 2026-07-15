@@ -22,7 +22,7 @@ if ! grep -q osd_keepaspect options/options.h 2>/dev/null; then
 	git apply ../../patches/mpv-osd-keepaspect.patch
 fi
 
-if ! grep -q image-subs-scale options/options.c 2>/dev/null; then
+if ! grep -q image-subs-scale-x options/options.c 2>/dev/null; then
     git apply ../../patches/mpv-image-subs-scale.patch
 fi
 
