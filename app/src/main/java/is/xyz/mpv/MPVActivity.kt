@@ -2915,7 +2915,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun isSubtitleUrlValid(url: String): Boolean {
         return try {
-            Log.d(TAG, "guessNetworkSubtitles: Trying: $url")
             val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "HEAD"   
             connection.connectTimeout = 300 // 300ms is very short, ideal for localhost
@@ -2923,6 +2922,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             
             var code = connection.responseCode
             connection.disconnect()
+
+            Log.d(TAG, "guessNetworkSubtitles: Code: $code URL: $url")
 
             // Fallback to GET if the server doesn't support HEAD (405 Method Not Allowed)
             if (code == 405) {
