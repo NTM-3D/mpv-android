@@ -117,7 +117,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var subtitlePosition = 0
     private var subtitleSize = 0
     private var imageSubtitle3D = true
-    private var imageSubtitleScale = 0
+    private var imageSubtitleScale = -6
     private var imageSubtitlePosition = 100
     private var imageSubsScaleX = 10
     private var imageSubsScaleY = 10
