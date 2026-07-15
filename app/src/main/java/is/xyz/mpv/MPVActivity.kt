@@ -3167,7 +3167,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitle3DCheck.setOnCheckedChangeListener { _, isChecked ->
             imageSubtitle3D = isChecked
-            MPVLib.setOptionString("image-subs-scale-x", if (!imageSubtitle3D) scaleX.toString() else "1.0")
+            MPVLib.setOptionString("image-subs-scale-x", if (imageSubtitle3D) "1.0")
             applyImageSubtitleStereoMode()
             applyImageSubtitlePosition(imageSubtitlePosition)
             applyImageSubtitleScale(imageSubtitleScale)
