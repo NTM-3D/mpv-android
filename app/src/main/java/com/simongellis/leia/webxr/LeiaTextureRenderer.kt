@@ -368,25 +368,26 @@ class LeiaTextureRenderer {
                             coord.x = mod(coord.x + 0.5, 1.0);
                         }
                     } else if (u_Mode == 2) {
-                        // Half-TAB: top half of texture = left eye, bottom half = right eye.
-                        // mpv is configured with keepaspect=no for stereo modes, so the
-                        // composite frame fills the buffer edge-to-edge and the eye
-                        // boundary always lands exactly at the halfway point.
+                        // Half-TAB / Full-TAB: top half of texture = left eye, bottom half = right eye.
+                        // u_Texture uses GL_LINEAR filtering, so sampling exactly at the y=0.5 seam
+                        // blends the last row of one eye with the first row of the other, leaking a
+                        // row across eyes. Inset the seam-facing edge of each half by half a texel.
+                        float texelHalfY = 0.5 / 1600.0; // matches MPVView's fixed SurfaceTexture buffer height
                         if (u_SwapImages == 0) {
                             if (contentCoord.x < 0.5) {
                                 coord.x = contentCoord.x * 2.0;
-                                coord.y = contentCoord.y * 0.5;
+                                coord.y = contentCoord.y * (0.5 - texelHalfY);
                             } else {
                                 coord.x = (contentCoord.x - 0.5) * 2.0;
-                                coord.y = 0.5 + contentCoord.y * 0.5;
+                                coord.y = 0.5 + texelHalfY + contentCoord.y * (0.5 - texelHalfY);
                             }
                         } else {
                             if (contentCoord.x < 0.5) {
                                 coord.x = contentCoord.x * 2.0;
-                                coord.y = 0.5 + contentCoord.y * 0.5;
+                                coord.y = 0.5 + texelHalfY + contentCoord.y * (0.5 - texelHalfY);
                             } else {
                                 coord.x = (contentCoord.x - 0.5) * 2.0;
-                                coord.y = contentCoord.y * 0.5;
+                                coord.y = contentCoord.y * (0.5 - texelHalfY);
                             }
                         }
                     } else if (u_Mode == 3) {
