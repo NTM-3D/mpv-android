@@ -13,7 +13,7 @@ android {
         targetSdk 35
 
         versionCode 102
-        versionName "v0.2 (mpv-android 2026-04-25-release)"
+        versionName "v0.2"
 
         vectorDrawables.useSupportLibrary = true
     }
