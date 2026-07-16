@@ -34,7 +34,7 @@ class AboutActivity : AppCompatActivity(), MPVLib.LogObserver {
             insets
         }
 
-        logs = "mpv-android ${BuildConfig.VERSION_NAME} / ${BuildConfig.VERSION_CODE} (${BuildConfig.BUILD_TYPE})\n"
+        logs = "MPV (NTM-3D) ${BuildConfig.VERSION_NAME} / ${BuildConfig.VERSION_CODE} (${BuildConfig.BUILD_TYPE})\n"
 
         // create mpv context to capture version info from log
         MPVLib.create(this)
