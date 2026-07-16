@@ -12,8 +12,8 @@ android {
         minSdkVersion 30
         targetSdk 35
 
-        versionCode 02
-        versionName "2026-04-25-release (v0.2)"
+        versionCode 102
+        versionName "v0.2 (mpv-android 2026-04-25-release)"
 
         vectorDrawables.useSupportLibrary = true
     }

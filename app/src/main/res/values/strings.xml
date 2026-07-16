@@ -109,7 +109,7 @@
     <string name="pref_header_advanced">Advanced</string>
     <string name="pref_header_advanced_summary"></string>
 
-    <string name="pref_header_about_mpv">About mpv</string>
+    <string name="pref_header_about_mpv">About MPV (NTM-3D)</string>
     <string name="pref_header_about_mpv_summary"></string>
 
     <string name="pref_default_file_manager_path_title">Default file manager path</string>
