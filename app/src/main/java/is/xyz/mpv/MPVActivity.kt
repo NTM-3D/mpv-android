@@ -3169,7 +3169,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         imageSubtitle3DCheck.setOnCheckedChangeListener { _, isChecked ->
             imageSubtitle3D = isChecked
-            if (isChecked) { imageSubtitleScaleSeekBar = 15; imageSubsScaleXSeekBar.progress = 9; imageSubsScaleYSeekBar.progress = 9 }
+            if (isChecked) { imageSubtitleScaleSeekBar.progress = 15; imageSubsScaleXSeekBar.progress = 9; imageSubsScaleYSeekBar.progress = 9 }
             applyImageSubtitleStereoMode()
             applyImageSubtitlePosition(imageSubtitlePosition)
             applyImageSubtitleScale(imageSubtitleScale)
