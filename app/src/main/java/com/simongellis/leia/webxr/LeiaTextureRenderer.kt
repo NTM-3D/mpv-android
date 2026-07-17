@@ -427,15 +427,8 @@ class LeiaTextureRenderer {
                     // (scale > 1 zooms in) without distorting the aspect ratio.
                     float anchorY = 0.85;
                     float anchorX = 0.5;
-                    // Compress scale effect to half strength around a neutral point of 1.0
-                    // (u_SubtitleScale == 1.0 must yield effectiveScale == 1.0, i.e. no
-                    // artificial zoom, otherwise the subtitle texture gets minified far
-                    // more than the SBS eye-squeeze alone requires, and mipmap filtering
-                    // blurs it no matter how much detail the source bitmap has).
-                    // u_SubtitleScale ranges [0, 2], so this keeps effectiveScale in
-                    // [0.5, 1.5] — safely away from 0 (which would blow up the division
-                    // below) while still giving the slider a usable range.
-                    float effectiveScale = 1.0 + (u_SubtitleScale - 1.0) / 2.0;
+                    // Compress scale effect to 1/4 strength
+                    float effectiveScale = 0.5 + (u_SubtitleScale - 1.0) / 4.0;
                     float scaleY = (posY - anchorY) / effectiveScale + anchorY;
                     float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
                     vec2 subCoord;
