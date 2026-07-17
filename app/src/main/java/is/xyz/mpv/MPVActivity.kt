@@ -2473,12 +2473,11 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
         val ss = 2
         val textSizePx = width * 0.045f * ss
-        val strokeWidth = textSizePx * 0.08f // Reduced to 8% for a smaller, cleaner outline
+        val strokeWidth = textSizePx * 0.08f // Small outline to minimize high-contrast edges
 
         // Outline paint
         val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
-            //color = Color.argb(200, 42, 42, 42) // Dark gray, slightly transparent
-            color = Color.parseColor("#505050")
+            color = Color.parseColor("#505050") // Soft dark gray
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
@@ -2487,23 +2486,23 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             strokeJoin = Paint.Join.ROUND
             strokeCap = Paint.Cap.ROUND
             
-            // Verified Android API calls
-            setHinting(Paint.HINTING_ON) 
-            letterSpacing = 0.04f
+            // Quality improvement: crisp pixel-grid alignment
+            setHinting(Paint.HINTING_ON)
+            // Quality improvement: true font weight
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
         // Fill paint
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.parseColor("#b8b8b8") // Light gray
+            color = Color.parseColor("#b8b8b8") // Light gray (avoids pure white peak luminance)
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
             style = Paint.Style.FILL
             
-            // Verified Android API calls
+            // Quality improvement: crisp pixel-grid alignment
             setHinting(Paint.HINTING_ON)
-            letterSpacing = 0.04f
+            // Quality improvement: true font weight
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
