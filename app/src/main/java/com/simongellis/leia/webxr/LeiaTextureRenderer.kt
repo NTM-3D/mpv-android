@@ -425,7 +425,7 @@ class LeiaTextureRenderer {
                     // Anchor X = 0.5 (horizontal center of the eye).
                     // Dividing the distance from anchor by scale makes content larger
                     // (scale > 1 zooms in) without distorting the aspect ratio.
-                    float anchorY = 0.5;
+                    float anchorY = 1.0;
                     float anchorX = 0.5;
                     // Double and then compress scale effect to 1/3 strength
                     float effectiveScale = 2.0 * (0.5 + (u_SubtitleScale - 1.0) / 3.0);
