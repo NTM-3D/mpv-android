@@ -417,7 +417,7 @@ class LeiaTextureRenderer {
                 // Mode 2 outputs SBS after TAB transformation
                 if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 2 || u_Mode == 3)) {
                     float eyeX = fract(v_TexCoord.x * 2.0);
-                    float depth = u_SubtitleDepth * 2.0;
+                    float depth = u_SubtitleDepth * 1.25;
                     // Scale uniformly around the subtitle anchor point.
                     // Anchor Y = 0.85 (near the bottom where subtitles live).
                     // Anchor X = 0.5 (horizontal center of the eye).
@@ -431,7 +431,7 @@ class LeiaTextureRenderer {
                     float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
                     // Position: applied after scaling, so it's a fixed screen-space shift
                     // independent of scale (positive = move up in screen space = add in UV Y).
-                    scaleY += (u_SubtitlePosition + 7);
+                    scaleY += u_SubtitlePosition;
                     vec2 subCoord;
                     if (v_TexCoord.x < 0.5) {
                         subCoord = vec2(scaleX + depth, scaleY);
