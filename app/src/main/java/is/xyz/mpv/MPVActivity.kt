@@ -2476,13 +2476,13 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // Removed the stroke entirely: a soft shadow provides the smoothest 
         // luminance gradient, which is the most effective way to mask crosstalk.
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.parseColor("#A9A9A9") // Light gray (avoids pure white peak luminance)
+            color = Color.parseColor("#FFFF00") // Light gray (avoids pure white peak luminance)
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
             style = Paint.Style.FILL
             // Soft black drop shadow to blend the text edge into the dark background
-            setShadowLayer(textSizePx * 0.15f, 0f, textSizePx * 0.05f, Color.BLACK)
+            setShadowLayer(textSizePx * 0.1f, 0f, textSizePx * 0.5f, Color.BLACK)
         }
 
         val layerWidth = textWidth * ss
