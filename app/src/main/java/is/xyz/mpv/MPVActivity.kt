@@ -2469,64 +2469,36 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val canvas = Canvas(bitmap)
 
         val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
-        // Render at 2x the final pixel width for clean downsampling — more than enough
-        // since the output canvas is already the full hardware buffer resolution (2560px).
         val ss = 2
-        // Size text at ~4.5% of the render width so it scales naturally with resolution
-        // rather than being tied to display density (which reflects the small physical screen).
         val textSizePx = width * 0.045f * ss
-        val strokeWidth = textSizePx * 0.12f  // 12% of text size for the outline
 
-        // Outline paint — drawn first, slightly larger, pure black
-        val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = Color.BLACK
-            textSize = textSizePx
-            textAlign = Paint.Align.LEFT
-            isLinearText = true
-            style = Paint.Style.STROKE
-            this.strokeWidth = strokeWidth
-            strokeJoin = Paint.Join.ROUND
-            strokeCap = Paint.Cap.ROUND
-        }
-        // Fill paint — drawn on top, white
+        // Fill paint: Light Gray with a soft drop shadow.
+        // Removed the stroke entirely: a soft shadow provides the smoothest 
+        // luminance gradient, which is the most effective way to mask crosstalk.
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.WHITE
+            color = Color.parseColor("#E0E0E0") // Light gray (avoids pure white peak luminance)
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
             style = Paint.Style.FILL
+            // Soft black drop shadow to blend the text edge into the dark background
+            setShadowLayer(textSizePx * 0.1f, 0f, textSizePx * 0.05f, Color.argb(200, 0, 0, 0))
         }
 
         val layerWidth = textWidth * ss
-        val outlineLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
-            .setAlignment(Layout.Alignment.ALIGN_CENTER)
-            .setIncludePad(false)
-            .build()
-        val fillLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
+        val textLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
 
-        val textLayer = Bitmap.createBitmap(layerWidth, outlineLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val textLayer = Bitmap.createBitmap(layerWidth, textLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val textCanvas = Canvas(textLayer)
-        //outlineLayout.draw(textCanvas)  // black outline first
-        fillLayout.draw(textCanvas)     // white fill on top
+        textLayout.draw(textCanvas)
 
-        // Calculate single-line baseline position
         val bottomMargin = (72f * 0.65f * resources.displayMetrics.density).roundToInt()
         val singleLineHeight = (textSizePx / ss).roundToInt()
         val singleLineBaseline = height - bottomMargin - singleLineHeight
 
-        // Center multi-line text around single-line baseline, but never let the
-        // block run past the top or bottom of the canvas — for 3+ line subtitles
-        // the block is taller than a single line's margin allows, and letting
-        // Canvas silently crop whatever falls outside [0, height] was cutting
-        // off (and visually smearing, once sampled by the shader) the outermost
-        // line. There's plenty of vertical screen space; just use it.
-        // Keep a small margin off the true edges too: content sitting flush
-        // against row 0/height gets sampled by the shader's zoom at the exact
-        // texture boundary, which GL_CLAMP_TO_EDGE + bilinear filtering can
-        // stretch into a thin vertical streak.
         val left = ((width - textWidth) / 2f)
         val dstHeight = (textLayer.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
         val idealTop = singleLineBaseline - dstHeight / 2 + singleLineHeight / 2
