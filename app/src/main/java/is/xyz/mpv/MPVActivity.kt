@@ -62,6 +62,8 @@ import androidx.media.AudioAttributesCompat
 import androidx.media.AudioFocusRequestCompat
 import androidx.media.AudioManagerCompat
 import com.leia.sdk.LeiaSDK
+import com.jaredrummler.colordialog.ColorPickerDialog
+import com.jaredrummler.colordialog.ColorPickerDialogListener
 import java.io.File
 import java.lang.IllegalArgumentException
 import kotlin.math.roundToInt
@@ -119,6 +121,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var subtitleDepth = 0
     private var subtitlePosition = 0
     private var subtitleSize = 0
+    private var subtitleColor = Color.parseColor("#b6b6b6")
     private var imageSubtitle3D = true
     private var imageSubtitleScale = 0
     private var imageSubtitlePosition = 100
@@ -604,6 +607,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         this.subtitleDepth = prefs.getInt("subtitle_depth_3d", 0).coerceIn(-15, 15)
         this.subtitlePosition = prefs.getInt("subtitle_position_3d", 0).coerceIn(-15, 15)
         this.subtitleSize = prefs.getInt("subtitle_size_3d", 0).coerceIn(-15, 15)
+        this.subtitleColor = prefs.getInt("subtitle_color_3d", Color.parseColor("#b6b6b6"))
         this.ignoreAudioFocus = prefs.getBoolean("ignore_audio_focus", false)
         this.playlistExitWarning = prefs.getBoolean("playlist_exit_warning", true)
         this.newIntentReplace = prefs.getBoolean("new_intent_replace", false)
@@ -2464,6 +2468,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         player.setStereoSubtitleScale(normalizedScale)
     }
 
+    private fun applySubtitleColor() {
+        updateStereoSubtitleText(currentSubText)
+    }
+
     private fun createSubtitleBitmap(text: String): Bitmap {
         val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
         val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
@@ -2495,7 +2503,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // Fill paint
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
             //color = Color.parseColor("#b8b8b8") // Light gray (avoids pure white peak luminance)
-            color = Color.WHITE
+            //color = Color.WHITE
+            color = subtitleColor
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
@@ -2738,6 +2747,19 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         getDefaultSharedPreferences(applicationContext).edit()
             .putInt("subtitle_size_3d", subtitleSize)
             .apply()
+    }
+
+    private fun persistSubtitleColor() {
+        prefs.edit()
+            .putInt("subtitle_color_3d", subtitleColor)
+            .apply()
+    }
+
+    private fun isColorLight(color: Int): Boolean {
+        val r = Color.red(color)
+        val g = Color.green(color)
+        val b = Color.blue(color)
+        return (r * 0.299 + g * 0.587 + b * 0.114) > 186
     }
 
     // Image subtitle settings are saved per opened file (like the last playback
@@ -3030,6 +3052,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val sizeLabel = dialogView.findViewById<android.widget.TextView>(R.id.sizeLabel)
         val sizeSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.sizeSeekBar)
         val sizeValue = dialogView.findViewById<android.widget.TextView>(R.id.sizeValue)
+        val colorLabel = dialogView.findViewById<android.widget.TextView>(R.id.colorLabel)
+        val colorPickerButton = dialogView.findViewById<Button>(R.id.colorPickerButton)
+        val colorResetButton = dialogView.findViewById<Button>(R.id.colorResetButton)
         val imageSubtitle3DCheck = dialogView.findViewById<CheckBox>(R.id.imageSubtitle3DCheck)
         val imageSubtitle3DCheckLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitle3DCheckLabel)
         val imageSubtitleScaleLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitleScaleLabel)
@@ -3064,6 +3089,14 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         sizeSeekBar.progress = subtitleSize + 15
         sizeValue.text = if (subtitleSize >= 0) "+$subtitleSize" else "$subtitleSize"
 
+        fun updateColorButtonAppearance() {
+            colorPickerButton.text = "0x${Integer.toHexString(subtitleColor).uppercase().padStart(8, '0')}"
+            colorPickerButton.backgroundTintList = ColorStateList.valueOf(subtitleColor)
+            colorPickerButton.setTextColor(if (isColorLight(subtitleColor)) Color.BLACK else Color.WHITE)
+        }
+
+        updateColorButtonAppearance()
+
         fun formatImageSubtitleScale(slider: Int): String {
             return String.format("%.1f", mapImageSubtitleScale(slider))
         }
@@ -3083,6 +3116,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             sizeLabel.isEnabled = enabled
             sizeSeekBar.isEnabled = enabled
             sizeValue.isEnabled = enabled
+            colorLabel.isEnabled = enabled
+            colorPickerButton.isEnabled = enabled
+            colorResetButton.isEnabled = enabled
         }
 
         fun setImageSubtitleSlidersEnabled(enabled: Boolean) {
@@ -3177,6 +3213,37 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             applyImageSubtitleScale(imageSubtitleScale)
             applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
             persistImageSubtitle3D()
+        }
+
+        colorPickerButton.setOnClickListener {
+            ColorPickerDialog.newBuilder()
+                .setDialogType(ColorPickerDialog.TYPE_CUSTOM) // The literal wheel
+                .setColor(subtitleColor)
+                .setAllowCustom(true)
+                .setShowAlphaSlider(true) // Subtitles often need transparency
+                .setDialogId(0)
+                .setColorPickerDialogListener(object : ColorPickerDialogListener {
+                    override fun onColorSelected(dialogId: Int, color: Int) {
+                        if (dialogId == 0) {
+                            subtitleColor = color
+                            updateColorButtonAppearance()
+                            applySubtitleColor()
+                            persistSubtitleColor()
+                        }
+                    }
+
+                    override fun onDialogDismissed(dialogId: Int) {
+                        // No action needed
+                    }
+                })
+                .show(this@MPVActivity, "subtitle_color_picker")
+        }
+
+        colorResetButton.setOnClickListener {
+            subtitleColor = Color.parseColor("#b6b6b6")
+            updateColorButtonAppearance()
+            applySubtitleColor()
+            persistSubtitleColor()
         }
 
         imageSubtitleScaleSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {

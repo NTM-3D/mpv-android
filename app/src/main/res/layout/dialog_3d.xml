@@ -194,6 +194,36 @@
                         android:textAppearance="?android:attr/textAppearanceSmall" />
                 </LinearLayout>
 
+                <TextView
+                    android:id="@+id/colorLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Color"
+                    android:textAppearance="?android:attr/textAppearanceSmall" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <Button
+                        android:id="@+id/colorPickerButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Pick Color" />
+
+                    <Button
+                        android:id="@+id/colorResetButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/reset" />
+                </LinearLayout>
+
             </LinearLayout>
 
             <!-- Divider -->
