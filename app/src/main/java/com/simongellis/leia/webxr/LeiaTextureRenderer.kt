@@ -372,7 +372,7 @@ class LeiaTextureRenderer {
                         // u_Texture uses GL_LINEAR filtering, so sampling exactly at the y=0.5 seam
                         // blends the last row of one eye with the first row of the other, leaking a
                         // row across eyes. Inset the seam-facing edge of each half by half a texel.
-                        float texelHalfY = 0.5 / 1600.0; // matches MPVView's fixed SurfaceTexture buffer height
+                        float texelHalfY = 1 / 1600.0; // matches MPVView's fixed SurfaceTexture buffer height
                         if (u_SwapImages == 0) {
                             if (contentCoord.x < 0.5) {
                                 coord.x = contentCoord.x * 2.0;
