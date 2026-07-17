@@ -212,10 +212,19 @@
                     android:orientation="horizontal"
                     android:gravity="center_vertical">
 
-                    <Button
-                        android:id="@+id/colorPickerButton"
-                        android:layout_width="96dp"
-                        android:layout_height="48dp" />
+                    <FrameLayout
+                        android:layout_width="98dp"
+                        android:layout_height="50dp"
+                        android:background="#60000000"
+                        android:padding="1dp">
+
+                        <Button
+                            android:id="@+id/colorPickerButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp" />
+                    </FrameLayout>
 
                     <Button
                         android:id="@+id/colorResetButton"
