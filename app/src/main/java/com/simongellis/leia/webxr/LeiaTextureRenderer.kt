@@ -419,7 +419,7 @@ class LeiaTextureRenderer {
                     float eyeX = fract(v_TexCoord.x * 2.0);
                     float depth = u_SubtitleDepth * 2.0;
                     // Position: shift independently of scale (positive = move up in screen space = add in UV Y)
-                    float posY = v_TexCoord.y + (u_SubtitlePosition / 4.0);
+                    float posY = v_TexCoord.y + (u_SubtitlePosition / 3.0);
                     // Scale uniformly around the subtitle anchor point.
                     // Anchor Y = 0.85 (near the bottom where subtitles live).
                     // Anchor X = 0.5 (horizontal center of the eye).
