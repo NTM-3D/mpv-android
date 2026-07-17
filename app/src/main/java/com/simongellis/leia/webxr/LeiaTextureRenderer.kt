@@ -419,7 +419,7 @@ class LeiaTextureRenderer {
                     float eyeX = fract(v_TexCoord.x * 2.0);
                     float depth = u_SubtitleDepth * 1.25;
                     // Position: shift independently of scale (positive = move up in screen space = add in UV Y)
-                    float posY = v_TexCoord.y + (u_SubtitlePosition / 2.0);
+                    float posY = v_TexCoord.y + (u_SubtitlePosition / 3.0);
                     // Scale uniformly around the subtitle anchor point.
                     // Anchor Y = 0.85 (near the bottom where subtitles live).
                     // Anchor X = 0.5 (horizontal center of the eye).
@@ -427,7 +427,7 @@ class LeiaTextureRenderer {
                     // (scale > 1 zooms in) without distorting the aspect ratio.
                     float anchorY = 0.85;
                     float anchorX = 0.5;
-                    // Compress scale effect to 1/3 strength
+                    // Double and then compress scale effect to 1/3 strength
                     float effectiveScale = 2.0 * (0.5 + (u_SubtitleScale - 1.0) / 3.0);
                     float scaleY = (posY - anchorY) / effectiveScale + anchorY;
                     float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
