@@ -428,7 +428,7 @@ class LeiaTextureRenderer {
                     float anchorY = 0.85;
                     float anchorX = 0.5;
                     // Compress scale effect to 1/3 strength
-                    float effectiveScale = 0.5 + (u_SubtitleScale - 1.0) / 3.0;
+                    float effectiveScale = 2.0 * (0.5 + (u_SubtitleScale - 1.0) / 3.0);
                     float scaleY = (posY - anchorY) / effectiveScale + anchorY;
                     float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
                     vec2 subCoord;
