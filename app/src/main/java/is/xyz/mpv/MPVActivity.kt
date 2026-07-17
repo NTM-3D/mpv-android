@@ -2478,7 +2478,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         // Outline paint
         val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
             //color = Color.argb(200, 42, 42, 42) // Dark gray, slightly transparent
-            color = Color.parseColor("#ff0000")
+            color = Color.parseColor("#505050")
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
