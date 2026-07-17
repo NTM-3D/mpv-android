@@ -3217,27 +3217,30 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         colorPickerButton.setOnClickListener {
-            ColorPickerDialog.newBuilder()
-                .setDialogType(ColorPickerDialog.TYPE_CUSTOM) // The literal wheel
+            val dialog = ColorPickerDialog.newBuilder()
+                .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
                 .setColor(subtitleColor)
                 .setAllowCustom(true)
-                .setShowAlphaSlider(true) // Subtitles often need transparency
+                .setShowAlphaSlider(true)
                 .setDialogId(0)
-                .setColorPickerDialogListener(object : ColorPickerDialogListener {
-                    override fun onColorSelected(dialogId: Int, color: Int) {
-                        if (dialogId == 0) {
-                            subtitleColor = color
-                            updateColorButtonAppearance()
-                            applySubtitleColor()
-                            persistSubtitleColor()
-                        }
-                    }
+                .create()
 
-                    override fun onDialogDismissed(dialogId: Int) {
-                        // No action needed
+            dialog.setColorPickerDialogListener(object : ColorPickerDialogListener {
+                override fun onColorSelected(dialogId: Int, color: Int) {
+                    if (dialogId == 0) {
+                        subtitleColor = color
+                        updateColorButtonAppearance()
+                        applySubtitleColor()
+                        persistSubtitleColor()
                     }
-                })
-                .show(this@MPVActivity, "subtitle_color_picker")
+                }
+
+                override fun onDialogDismissed(dialogId: Int) {
+                    // No action needed
+                }
+            })
+
+            dialog.show(supportFragmentManager, "subtitle_color_picker")
         }
 
         colorResetButton.setOnClickListener {
