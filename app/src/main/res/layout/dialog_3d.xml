@@ -216,10 +216,11 @@
                         android:layout_width="78dp"
                         android:layout_height="46dp"
                         android:background="#00000000"
-                        android:padding="2px">
+                        android:padding="20px">
 
                         <Button
                             android:id="@+id/colorPickerButton"
+                            style="?android:attr/borderlessButtonStyle"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:insetTop="0dp"
