@@ -236,6 +236,7 @@
                         style="?android:attr/borderlessButtonStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_gravity="bottom"
                         android:minWidth="0dp"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
