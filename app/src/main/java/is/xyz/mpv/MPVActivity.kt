@@ -62,8 +62,8 @@ import androidx.media.AudioAttributesCompat
 import androidx.media.AudioFocusRequestCompat
 import androidx.media.AudioManagerCompat
 import com.leia.sdk.LeiaSDK
-import com.jaredrummler.colorpicker.ColorPickerDialog
-import com.jaredrummler.colorpicker.ColorPickerDialogListener
+import com.jaredrummler.android.colorpicker.ColorPickerDialog
+import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import java.io.File
 import java.lang.IllegalArgumentException
 import kotlin.math.roundToInt
@@ -2751,7 +2751,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     }
 
     private fun persistSubtitleColor() {
-        prefs.edit()
+        getDefaultSharedPreferences(applicationContext).edit()
             .putInt("subtitle_color_3d", subtitleColor)
             .apply()
     }
