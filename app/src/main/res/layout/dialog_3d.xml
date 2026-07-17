@@ -216,7 +216,7 @@
                         android:layout_width="78dp"
                         android:layout_height="46dp"
                         android:background="#000000"
-                        android:padding="2px">
+                        android:padding="1px">
 
                         <Button
                             android:id="@+id/colorPickerButton"
