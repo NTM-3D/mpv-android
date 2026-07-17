@@ -69,5 +69,6 @@ dependencies {
     implementation 'androidx.media:media:1.7.1'
     implementation 'androidx.preference:preference-ktx:1.2.1'
     implementation 'com.google.android.material:material:1.13.0'
+    implementation 'com.jaredrummler:colorpicker:1.1.0'
     implementation project(':leia-cnsdk')
 }
