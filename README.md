@@ -2,7 +2,7 @@
 
 This fork of mpv-android focuses on 3D playback for the Lume Pad 2.
 
-Video demo:  
+Video demo (v0.2):  
 <a href="https://www.youtube.com/watch?v=1BVJc7-LFJU"><img src="https://img.youtube.com/vi/1BVJc7-LFJU/0.jpg" width="240">
 
 ## Credits
@@ -49,7 +49,7 @@ If no format is detected, the player defaults to Half SBS when 3D is enabled man
 ## 3D Subtitles
 
 The player provides advanced controls for subtitles in 3D mode via the 3D settings dialog:
-- Text Subtitles: Rendered as custom stereo bitmaps with adjustable depth, position, and overall scale.
+- Text Subtitles: Rendered as custom stereo bitmaps with adjustable depth, position, size and color.
 - Image Subtitles (PGS, VobSub, DVD, etc.): 
   - Pre-authored 3D: If the subtitle already contains stereo pairs, it is rendered natively with correct positioning.
   - Mono Duplication: If the subtitle is mono, it can be automatically duplicated into both eyes to match the current SBS/TAB packing.
