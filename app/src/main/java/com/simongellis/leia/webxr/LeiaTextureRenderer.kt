@@ -372,7 +372,7 @@ class LeiaTextureRenderer {
                         // u_Texture uses GL_LINEAR filtering, so sampling exactly at the y=0.5 seam
                         // blends the last row of one eye with the first row of the other, leaking a
                         // row across eyes. Inset the seam-facing edge of each half by half a texel.
-                        float texelHalfY = 0.5 / 1600.0; // matches MPVView's fixed SurfaceTexture buffer height
+                        float texelHalfY = 1.0 / 1600.0; // matches MPVView's fixed SurfaceTexture buffer height
                         if (u_SwapImages == 0) {
                             if (contentCoord.x < 0.5) {
                                 coord.x = contentCoord.x * 2.0;
@@ -417,9 +417,9 @@ class LeiaTextureRenderer {
                 // Mode 2 outputs SBS after TAB transformation
                 if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 2 || u_Mode == 3)) {
                     float eyeX = fract(v_TexCoord.x * 2.0);
-                    float depth = u_SubtitleDepth * 2.0;
+                    float depth = u_SubtitleDepth * 1.25;
                     // Position: shift independently of scale (positive = move up in screen space = add in UV Y)
-                    float posY = v_TexCoord.y + (u_SubtitlePosition / 4.0);
+                    float posY = v_TexCoord.y + (u_SubtitlePosition / 3.0);
                     // Scale uniformly around the subtitle anchor point.
                     // Anchor Y = 0.85 (near the bottom where subtitles live).
                     // Anchor X = 0.5 (horizontal center of the eye).
@@ -427,8 +427,8 @@ class LeiaTextureRenderer {
                     // (scale > 1 zooms in) without distorting the aspect ratio.
                     float anchorY = 0.85;
                     float anchorX = 0.5;
-                    // Compress scale effect to 1/4 strength
-                    float effectiveScale = 0.5 + (u_SubtitleScale - 1.0) / 4.0;
+                    // Double and then compress scale effect to 1/3 strength
+                    float effectiveScale = 2.0 * (0.5 + (u_SubtitleScale - 1.0) / 3.0);
                     float scaleY = (posY - anchorY) / effectiveScale + anchorY;
                     float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
                     vec2 subCoord;

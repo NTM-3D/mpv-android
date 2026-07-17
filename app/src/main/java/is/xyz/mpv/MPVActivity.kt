@@ -21,6 +21,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.drawable.Icon
 import android.util.Log
 import android.media.AudioManager
@@ -60,9 +62,12 @@ import androidx.media.AudioAttributesCompat
 import androidx.media.AudioFocusRequestCompat
 import androidx.media.AudioManagerCompat
 import com.leia.sdk.LeiaSDK
+import com.jaredrummler.android.colorpicker.ColorPickerDialog
+import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import java.io.File
 import java.lang.IllegalArgumentException
 import kotlin.math.roundToInt
+import kotlin.math.ceil
 
 typealias ActivityResultCallback = (Int, Intent?) -> Unit
 typealias StateRestoreCallback = () -> Unit
@@ -117,6 +122,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var subtitleDepth = 0
     private var subtitlePosition = 0
     private var subtitleSize = 0
+    private val defaultSubtitleColor = Color.parseColor("#b6b6b6")
+    private var subtitleColor = defaultSubtitleColor
     private var imageSubtitle3D = true
     private var imageSubtitleScale = 0
     private var imageSubtitlePosition = 100
@@ -602,6 +609,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         this.subtitleDepth = prefs.getInt("subtitle_depth_3d", 0).coerceIn(-15, 15)
         this.subtitlePosition = prefs.getInt("subtitle_position_3d", 0).coerceIn(-15, 15)
         this.subtitleSize = prefs.getInt("subtitle_size_3d", 0).coerceIn(-15, 15)
+        this.subtitleColor = prefs.getInt("subtitle_color_3d", defaultSubtitleColor)
         this.ignoreAudioFocus = prefs.getBoolean("ignore_audio_focus", false)
         this.playlistExitWarning = prefs.getBoolean("playlist_exit_warning", true)
         this.newIntentReplace = prefs.getBoolean("new_intent_replace", false)
@@ -2449,9 +2457,10 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
     private fun applySubtitlePosition(position: Int) {
         val clamped = position.coerceIn(-15, 15)
+        val shifted = clamped + 5
         // Positive position = move up on screen.
         // Map range -15..15 to ±0.4 (40% of screen height) so subtitles can reach into letterbox.
-        val normalizedPosition = (clamped / 15f) * 0.4f
+        val normalizedPosition = (shifted / 15f) * 0.4f
         player.setStereoSubtitlePosition(normalizedPosition)
     }
 
@@ -2462,24 +2471,23 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         player.setStereoSubtitleScale(normalizedScale)
     }
 
+    private fun applySubtitleColor() {
+        updateStereoSubtitleText(currentSubText)
+    }
+
     private fun createSubtitleBitmap(text: String): Bitmap {
         val width = if (binding.player.width > 0) binding.player.width else resources.displayMetrics.widthPixels
         val height = if (binding.player.height > 0) binding.player.height else resources.displayMetrics.heightPixels
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
-        // Render at 2x the final pixel width for clean downsampling — more than enough
-        // since the output canvas is already the full hardware buffer resolution (2560px).
         val ss = 2
-        // Size text at ~4.5% of the render width so it scales naturally with resolution
-        // rather than being tied to display density (which reflects the small physical screen).
-        val textSizePx = width * 0.045f * ss
-        val strokeWidth = textSizePx * 0.12f  // 12% of text size for the outline
+        val textSizePx = width * 0.045f * 0.5f * ss
+        val strokeWidth = textSizePx * 0.08f // Small outline to minimize high-contrast edges
 
-        // Outline paint — drawn first, slightly larger, pure black
-        val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            color = Color.BLACK
+        // Outline paint
+        val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+            color = Color.parseColor("#505050") // Soft dark gray
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
@@ -2487,21 +2495,31 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             this.strokeWidth = strokeWidth
             strokeJoin = Paint.Join.ROUND
             strokeCap = Paint.Cap.ROUND
+            setHinting(Paint.HINTING_ON)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
-        // Fill paint — drawn on top, white
-        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.WHITE
+
+        // Fill paint
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+            color = subtitleColor
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
             style = Paint.Style.FILL
+            setHinting(Paint.HINTING_ON)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
-        val layerWidth = textWidth * ss
+        // Size the layout to the longest line's natural width, so StaticLayout has no reason to wrap it
+        val lines = text.split("\n")
+        val maxLineWidth = lines.maxOf { outlinePaint.measureText(it) }
+        val layerWidth = ceil(maxLineWidth + strokeWidth).toInt().coerceAtLeast(1)
+
         val outlineLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
+
         val fillLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
@@ -2509,31 +2527,22 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         val textLayer = Bitmap.createBitmap(layerWidth, outlineLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val textCanvas = Canvas(textLayer)
-        outlineLayout.draw(textCanvas)  // black outline first
-        fillLayout.draw(textCanvas)     // white fill on top
 
-        // Calculate single-line baseline position
+        outlineLayout.draw(textCanvas)
+        fillLayout.draw(textCanvas)
+
         val bottomMargin = (72f * 0.65f * resources.displayMetrics.density).roundToInt()
-        val singleLineHeight = (textSizePx / ss).roundToInt()
-        val singleLineBaseline = height - bottomMargin - singleLineHeight
+        // Natural render size, only shrunk if it's actually wider than the screen
+        val naturalWidth = layerWidth / ss.toFloat()
+        val dstWidth = naturalWidth.coerceAtMost(width.toFloat())
+        val scale = dstWidth / naturalWidth
+        val dstHeight = (textLayer.height / ss.toFloat()) * scale
 
-        // Center multi-line text around single-line baseline, but never let the
-        // block run past the top or bottom of the canvas — for 3+ line subtitles
-        // the block is taller than a single line's margin allows, and letting
-        // Canvas silently crop whatever falls outside [0, height] was cutting
-        // off (and visually smearing, once sampled by the shader) the outermost
-        // line. There's plenty of vertical screen space; just use it.
-        // Keep a small margin off the true edges too: content sitting flush
-        // against row 0/height gets sampled by the shader's zoom at the exact
-        // texture boundary, which GL_CLAMP_TO_EDGE + bilinear filtering can
-        // stretch into a thin vertical streak.
-        val left = ((width - textWidth) / 2f)
-        val dstHeight = (textLayer.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
-        val idealTop = singleLineBaseline - dstHeight / 2 + singleLineHeight / 2
-        val edgeMargin = (singleLineHeight * 0.25f).roundToInt().coerceAtLeast(1)
-        val maxTop = (height - dstHeight - edgeMargin).coerceAtLeast(edgeMargin)
-        val top = idealTop.coerceIn(edgeMargin, maxTop)
-        val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
+        val left = (width - dstWidth) / 2f
+        // Bottom edge always sits at a fixed distance from the screen bottom, regardless of line count
+        val top = height - bottomMargin - dstHeight
+        val dst = RectF(left, top, left + dstWidth, top + dstHeight)
+
         canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         textLayer.recycle()
         return bitmap
@@ -2735,6 +2744,12 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private fun persistSubtitleSize() {
         getDefaultSharedPreferences(applicationContext).edit()
             .putInt("subtitle_size_3d", subtitleSize)
+            .apply()
+    }
+
+    private fun persistSubtitleColor() {
+        getDefaultSharedPreferences(applicationContext).edit()
+            .putInt("subtitle_color_3d", subtitleColor)
             .apply()
     }
 
@@ -3028,6 +3043,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val sizeLabel = dialogView.findViewById<android.widget.TextView>(R.id.sizeLabel)
         val sizeSeekBar = dialogView.findViewById<android.widget.SeekBar>(R.id.sizeSeekBar)
         val sizeValue = dialogView.findViewById<android.widget.TextView>(R.id.sizeValue)
+        val colorLabel = dialogView.findViewById<android.widget.TextView>(R.id.colorLabel)
+        val colorPickerButton = dialogView.findViewById<Button>(R.id.colorPickerButton)
+        val colorResetButton = dialogView.findViewById<Button>(R.id.colorResetButton)
         val imageSubtitle3DCheck = dialogView.findViewById<CheckBox>(R.id.imageSubtitle3DCheck)
         val imageSubtitle3DCheckLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitle3DCheckLabel)
         val imageSubtitleScaleLabel = dialogView.findViewById<android.widget.TextView>(R.id.imageSubtitleScaleLabel)
@@ -3062,6 +3080,12 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         sizeSeekBar.progress = subtitleSize + 15
         sizeValue.text = if (subtitleSize >= 0) "+$subtitleSize" else "$subtitleSize"
 
+        fun updateColorButtonAppearance() {
+            colorPickerButton.backgroundTintList = ColorStateList.valueOf(subtitleColor)
+        }
+
+        updateColorButtonAppearance()
+
         fun formatImageSubtitleScale(slider: Int): String {
             return String.format("%.1f", mapImageSubtitleScale(slider))
         }
@@ -3081,6 +3105,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             sizeLabel.isEnabled = enabled
             sizeSeekBar.isEnabled = enabled
             sizeValue.isEnabled = enabled
+            colorLabel.isEnabled = enabled
+            colorPickerButton.isEnabled = enabled
+            colorResetButton.isEnabled = enabled
         }
 
         fun setImageSubtitleSlidersEnabled(enabled: Boolean) {
@@ -3175,6 +3202,40 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             applyImageSubtitleScale(imageSubtitleScale)
             applyLeiaDisplayProperties(currentLeiaFormat, leiaEnabled)
             persistImageSubtitle3D()
+        }
+
+        colorPickerButton.setOnClickListener {
+            val dialog = ColorPickerDialog.newBuilder()
+                .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
+                .setColor(subtitleColor)
+                .setAllowCustom(true)
+                .setShowAlphaSlider(true)
+                .setDialogId(0)
+                .create()
+
+            dialog.setColorPickerDialogListener(object : ColorPickerDialogListener {
+                override fun onColorSelected(dialogId: Int, color: Int) {
+                    if (dialogId == 0) {
+                        subtitleColor = color
+                        updateColorButtonAppearance()
+                        applySubtitleColor()
+                        persistSubtitleColor()
+                    }
+                }
+
+                override fun onDialogDismissed(dialogId: Int) {
+                    // No action needed
+                }
+            })
+
+            dialog.show(supportFragmentManager, "subtitle_color_picker")
+        }
+
+        colorResetButton.setOnClickListener {
+            subtitleColor = defaultSubtitleColor
+            updateColorButtonAppearance()
+            applySubtitleColor()
+            persistSubtitleColor()
         }
 
         imageSubtitleScaleSeekBar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
