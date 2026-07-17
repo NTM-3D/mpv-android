@@ -216,14 +216,14 @@
                     <FrameLayout
                         android:layout_width="32dp"
                         android:layout_height="32dp"
-                        android:background="#000000"
+                        android:background="@drawable/circle_border_black"
                         android:padding="1dp">
 
                         <Button
                             android:id="@+id/colorPickerButton"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
-                            android:background="@android:color/white"
+                            android:background="@drawable/circle_fill_white"
                             android:insetLeft="0dp"
                             android:insetRight="0dp"
                             android:insetTop="0dp"
