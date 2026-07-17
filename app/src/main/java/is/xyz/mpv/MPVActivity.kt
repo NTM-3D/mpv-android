@@ -67,6 +67,7 @@ import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import java.io.File
 import java.lang.IllegalArgumentException
 import kotlin.math.roundToInt
+import kotlin.math.ceil
 
 typealias ActivityResultCallback = (Int, Intent?) -> Unit
 typealias StateRestoreCallback = () -> Unit
