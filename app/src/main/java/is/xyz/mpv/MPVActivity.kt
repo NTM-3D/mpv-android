@@ -62,8 +62,8 @@ import androidx.media.AudioAttributesCompat
 import androidx.media.AudioFocusRequestCompat
 import androidx.media.AudioManagerCompat
 import com.leia.sdk.LeiaSDK
-import com.jaredrummler.colordialog.ColorPickerDialog
-import com.jaredrummler.colordialog.ColorPickerDialogListener
+import com.jaredrummler.colorpicker.ColorPickerDialog
+import com.jaredrummler.colorpicker.ColorPickerDialogListener
 import java.io.File
 import java.lang.IllegalArgumentException
 import kotlin.math.roundToInt
@@ -121,7 +121,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
     private var subtitleDepth = 0
     private var subtitlePosition = 0
     private var subtitleSize = 0
-    private var subtitleColor = Color.parseColor("#b6b6b6")
+    private val defaultSubtitleColor = Color.parseColor("#b6b6b6")
+    private var subtitleColor = defaultSubtitleColor
     private var imageSubtitle3D = true
     private var imageSubtitleScale = 0
     private var imageSubtitlePosition = 100
@@ -607,7 +608,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         this.subtitleDepth = prefs.getInt("subtitle_depth_3d", 0).coerceIn(-15, 15)
         this.subtitlePosition = prefs.getInt("subtitle_position_3d", 0).coerceIn(-15, 15)
         this.subtitleSize = prefs.getInt("subtitle_size_3d", 0).coerceIn(-15, 15)
-        this.subtitleColor = prefs.getInt("subtitle_color_3d", Color.parseColor("#b6b6b6"))
+        this.subtitleColor = prefs.getInt("subtitle_color_3d", defaultSubtitleColor)
         this.ignoreAudioFocus = prefs.getBoolean("ignore_audio_focus", false)
         this.playlistExitWarning = prefs.getBoolean("playlist_exit_warning", true)
         this.newIntentReplace = prefs.getBoolean("new_intent_replace", false)
@@ -3240,7 +3241,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         }
 
         colorResetButton.setOnClickListener {
-            subtitleColor = Color.parseColor("#b6b6b6")
+            subtitleColor = defaultSubtitleColor
             updateColorButtonAppearance()
             applySubtitleColor()
             persistSubtitleColor()
