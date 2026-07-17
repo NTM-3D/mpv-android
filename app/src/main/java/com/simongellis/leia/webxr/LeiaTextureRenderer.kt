@@ -418,8 +418,6 @@ class LeiaTextureRenderer {
                 if (u_SubtitleEnabled == 1 && (u_Mode == 1 || u_Mode == 2 || u_Mode == 3)) {
                     float eyeX = fract(v_TexCoord.x * 2.0);
                     float depth = u_SubtitleDepth * 2.0;
-                    // Position: shift independently of scale (positive = move up in screen space = add in UV Y)
-                    float posY = v_TexCoord.y + (u_SubtitlePosition / 3.0);
                     // Scale uniformly around the subtitle anchor point.
                     // Anchor Y = 0.85 (near the bottom where subtitles live).
                     // Anchor X = 0.5 (horizontal center of the eye).
@@ -429,8 +427,11 @@ class LeiaTextureRenderer {
                     float anchorX = 0.5;
                     // Compress scale effect to 1/3 strength
                     float effectiveScale = 2.0 * (0.5 + (u_SubtitleScale - 1.0) / 3.0);
-                    float scaleY = (posY - anchorY) / effectiveScale + anchorY;
+                    float scaleY = (v_TexCoord.y - anchorY) / effectiveScale + anchorY;
                     float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
+                    // Position: applied after scaling, so it's a fixed screen-space shift
+                    // independent of scale (positive = move up in screen space = add in UV Y).
+                    scaleY += (u_SubtitlePosition / 4.0);
                     vec2 subCoord;
                     if (v_TexCoord.x < 0.5) {
                         subCoord = vec2(scaleX + depth, scaleY);
@@ -443,7 +444,6 @@ class LeiaTextureRenderer {
                         max(gl_FragColor.a, sub.a)
                     );
                 }
-            }
         """
 
         const val VERTEX_SIZE = 2
