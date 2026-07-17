@@ -2481,7 +2481,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val canvas = Canvas(bitmap)
 
         val ss = 2
-        val textSizePx = width * 0.045f * 0.5f * ss   // halved — same 0.045 base, times 0.5
+        val textSizePx = width * 0.045f * 0.5f * ss
         val strokeWidth = textSizePx * 0.08f // Small outline to minimize high-contrast edges
 
         // Outline paint
@@ -2531,9 +2531,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         fillLayout.draw(textCanvas)
 
         val bottomMargin = (72f * 0.65f * resources.displayMetrics.density).roundToInt()
-        val singleLineHeight = (textSizePx / ss).roundToInt()
-        val singleLineBaseline = height - bottomMargin - singleLineHeight
-
         // Natural render size, only shrunk if it's actually wider than the screen
         val naturalWidth = layerWidth / ss.toFloat()
         val dstWidth = naturalWidth.coerceAtMost(width.toFloat())
@@ -2541,10 +2538,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val dstHeight = (textLayer.height / ss.toFloat()) * scale
 
         val left = (width - dstWidth) / 2f
-        val idealTop = singleLineBaseline - dstHeight / 2f + singleLineHeight / 2f
-        val edgeMargin = (singleLineHeight * 0.25f).coerceAtLeast(1f)
-        val maxTop = (height - dstHeight - edgeMargin).coerceAtLeast(edgeMargin)
-        val top = idealTop.coerceIn(edgeMargin, maxTop)
+        // Bottom edge always sits at a fixed distance from the screen bottom, regardless of line count
+        val top = height - bottomMargin - dstHeight
         val dst = RectF(left, top, left + dstWidth, top + dstHeight)
 
         canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
