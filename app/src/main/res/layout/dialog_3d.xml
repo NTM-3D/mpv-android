@@ -214,10 +214,10 @@
                     android:gravity="center_vertical">
 
                     <FrameLayout
-                        android:layout_width="46dp"
-                        android:layout_height="34dp"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
                         android:background="#000000"
-                        android:padding="2dp">
+                        android:padding="1dp">
 
                         <Button
                             android:id="@+id/colorPickerButton"
@@ -247,6 +247,7 @@
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
                         android:layout_marginStart="8dp"
+                        android:foreground="@null"
                         android:textAllCaps="false"
                         android:text="Reset" />
                 </LinearLayout>
