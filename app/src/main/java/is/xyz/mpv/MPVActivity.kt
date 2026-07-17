@@ -2509,7 +2509,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         val textLayer = Bitmap.createBitmap(layerWidth, outlineLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val textCanvas = Canvas(textLayer)
-        outlineLayout.draw(textCanvas)  // black outline first
+        //outlineLayout.draw(textCanvas)  // black outline first
         fillLayout.draw(textCanvas)     // white fill on top
 
         // Calculate single-line baseline position
