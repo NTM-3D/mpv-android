@@ -2472,50 +2472,51 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val ss = 2
         val textSizePx = width * 0.045f * ss
         
-        // Small outline: 8% of text size. 
-        // Dark gray (#2A2A2A) at ~80% opacity prevents a harsh pure-black edge 
-        // while still separating the light gray text from the black background.
-        val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.argb(200, 42, 42, 42)
+        // Outline paint
+        val outlinePaint = android.graphics.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.DITHER_FLAG).apply {
+            color = android.graphics.Color.argb(200, 42, 42, 42)
             textSize = textSizePx
-            textAlign = Paint.Align.LEFT
+            textAlign = android.graphics.Paint.Align.LEFT
             isLinearText = true
-            style = Paint.Style.STROKE
+            style = android.graphics.Paint.Style.STROKE
             strokeWidth = textSizePx * 0.08f
-            strokeJoin = Paint.Join.ROUND
-            strokeCap = Paint.Cap.ROUND
-            isHinting = true
+            strokeJoin = android.graphics.Paint.Join.ROUND
+            strokeCap = android.graphics.Paint.Cap.ROUND
+            
+            // Correct API for hinting
+            setHinting(android.graphics.Paint.HINTING_ON)
             letterSpacing = 0.04f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
 
-        // Fill paint: Light gray, no shadow.
-        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.parseColor("#E0E0E0")
+        // Fill paint
+        val textPaint = android.graphics.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.DITHER_FLAG).apply {
+            color = android.graphics.Color.parseColor("#E0E0E0")
             textSize = textSizePx
-            textAlign = Paint.Align.LEFT
+            textAlign = android.graphics.Paint.Align.LEFT
             isLinearText = true
-            style = Paint.Style.FILL
-            isHinting = true
+            style = android.graphics.Paint.Style.FILL
+            
+            // Correct API for hinting
+            setHinting(android.graphics.Paint.HINTING_ON)
             letterSpacing = 0.04f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
 
         val layerWidth = textWidth * ss
-        val outlineLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
-            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+        val outlineLayout = android.text.StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
+            .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
             
-        val fillLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
-            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+        val fillLayout = android.text.StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
+            .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
 
         val textLayer = Bitmap.createBitmap(layerWidth, outlineLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val textCanvas = Canvas(textLayer)
         
-        // Draw outline first, then fill on top
         outlineLayout.draw(textCanvas)
         fillLayout.draw(textCanvas)
 
@@ -2531,7 +2532,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val top = idealTop.coerceIn(edgeMargin, maxTop)
         val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
         
-        canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        canvas.drawBitmap(textLayer, null, dst, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
         textLayer.recycle()
         return bitmap
     }
