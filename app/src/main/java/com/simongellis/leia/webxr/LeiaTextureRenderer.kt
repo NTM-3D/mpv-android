@@ -431,7 +431,7 @@ class LeiaTextureRenderer {
                     float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
                     // Position: applied after scaling, so it's a fixed screen-space shift
                     // independent of scale (positive = move up in screen space = add in UV Y).
-                    scaleY += u_SubtitlePosition;
+                    scaleY += (u_SubtitlePosition / 2.0);
                     vec2 subCoord;
                     if (v_TexCoord.x < 0.5) {
                         subCoord = vec2(scaleX + depth, scaleY);
