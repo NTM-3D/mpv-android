@@ -2534,11 +2534,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val singleLineHeight = (textSizePx / ss).roundToInt()
         val singleLineBaseline = height - bottomMargin - singleLineHeight
 
-        // Natural render size, only shrunk if it's actually wider than the screen
-        val naturalWidth = layerWidth / ss.toFloat()
-        val dstWidth = naturalWidth.coerceAtMost(width.toFloat())
-        val scale = dstWidth / naturalWidth
-        val dstHeight = (textLayer.height / ss.toFloat()) * scale
+        val dstWidth = layerWidth / ss.toFloat()
+        val dstHeight = textLayer.height / ss.toFloat()
 
         val left = (width - dstWidth) / 2f
         val idealTop = singleLineBaseline - dstHeight / 2f + singleLineHeight / 2f
