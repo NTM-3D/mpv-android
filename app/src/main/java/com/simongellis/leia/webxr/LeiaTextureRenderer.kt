@@ -444,6 +444,7 @@ class LeiaTextureRenderer {
                         max(gl_FragColor.a, sub.a)
                     );
                 }
+            }
         """
 
         const val VERTEX_SIZE = 2
