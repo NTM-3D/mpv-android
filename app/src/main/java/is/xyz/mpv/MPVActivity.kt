@@ -2471,29 +2471,53 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
         val ss = 2
         val textSizePx = width * 0.045f * ss
+        
+        // Small outline: 8% of text size. 
+        // Dark gray (#2A2A2A) at ~80% opacity prevents a harsh pure-black edge 
+        // while still separating the light gray text from the black background.
+        val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+            color = Color.argb(200, 42, 42, 42)
+            textSize = textSizePx
+            textAlign = Paint.Align.LEFT
+            isLinearText = true
+            style = Paint.Style.STROKE
+            strokeWidth = textSizePx * 0.08f
+            strokeJoin = Paint.Join.ROUND
+            strokeCap = Paint.Cap.ROUND
+            isHinting = true
+            letterSpacing = 0.04f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
 
-        // Fill paint: Light Gray with a soft drop shadow.
-        // Removed the stroke entirely: a soft shadow provides the smoothest 
-        // luminance gradient, which is the most effective way to mask crosstalk.
-        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.parseColor("#FFFF00") // Light gray (avoids pure white peak luminance)
+        // Fill paint: Light gray, no shadow.
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+            color = Color.parseColor("#E0E0E0")
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
             style = Paint.Style.FILL
-            // Soft black drop shadow to blend the text edge into the dark background
-            setShadowLayer(textSizePx * 0.1f, 0f, textSizePx * 0.5f, Color.BLACK)
+            isHinting = true
+            letterSpacing = 0.04f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         }
 
         val layerWidth = textWidth * ss
-        val textLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
+        val outlineLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setIncludePad(false)
+            .build()
+            
+        val fillLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
 
-        val textLayer = Bitmap.createBitmap(layerWidth, textLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        val textLayer = Bitmap.createBitmap(layerWidth, outlineLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val textCanvas = Canvas(textLayer)
-        textLayout.draw(textCanvas)
+        
+        // Draw outline first, then fill on top
+        outlineLayout.draw(textCanvas)
+        fillLayout.draw(textCanvas)
 
         val bottomMargin = (72f * 0.65f * resources.displayMetrics.density).roundToInt()
         val singleLineHeight = (textSizePx / ss).roundToInt()
@@ -2506,6 +2530,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val maxTop = (height - dstHeight - edgeMargin).coerceAtLeast(edgeMargin)
         val top = idealTop.coerceIn(edgeMargin, maxTop)
         val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
+        
         canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         textLayer.recycle()
         return bitmap
