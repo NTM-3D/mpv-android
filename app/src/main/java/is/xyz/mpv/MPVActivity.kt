@@ -2477,7 +2477,8 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         // Outline paint
         val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.argb(200, 42, 42, 42) // Dark gray, slightly transparent
+            //color = Color.argb(200, 42, 42, 42) // Dark gray, slightly transparent
+            color = Color.parseColor("#ff0000")
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
@@ -2489,12 +2490,12 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // Verified Android API calls
             setHinting(Paint.HINTING_ON) 
             letterSpacing = 0.04f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) // True bold, works on all API levels
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
         // Fill paint
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
-            color = Color.parseColor("#E0E0E0") // Light gray
+            color = Color.parseColor("#b8b8b8") // Light gray
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
@@ -2503,7 +2504,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             // Verified Android API calls
             setHinting(Paint.HINTING_ON)
             letterSpacing = 0.04f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
         val layerWidth = textWidth * ss
