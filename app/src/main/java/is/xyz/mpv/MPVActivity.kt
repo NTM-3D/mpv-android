@@ -2479,7 +2479,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
         val ss = 2
         val textSizePx = width * 0.045f * ss
         val strokeWidth = textSizePx * 0.08f // Small outline to minimize high-contrast edges
@@ -2494,35 +2493,31 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             this.strokeWidth = strokeWidth
             strokeJoin = Paint.Join.ROUND
             strokeCap = Paint.Cap.ROUND
-            
-            // Quality improvement: crisp pixel-grid alignment
             setHinting(Paint.HINTING_ON)
-            // Quality improvement: true font weight
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
         // Fill paint
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
-            //color = Color.parseColor("#b8b8b8") // Light gray (avoids pure white peak luminance)
-            //color = Color.WHITE
             color = subtitleColor
             textSize = textSizePx
             textAlign = Paint.Align.LEFT
             isLinearText = true
             style = Paint.Style.FILL
-            
-            // Quality improvement: crisp pixel-grid alignment
             setHinting(Paint.HINTING_ON)
-            // Quality improvement: true font weight
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
-        val layerWidth = textWidth * ss
+        // Size the layout to the longest line's natural width, so StaticLayout has no reason to wrap it
+        val lines = text.split("\n")
+        val maxLineWidth = lines.maxOf { outlinePaint.measureText(it) }
+        val layerWidth = ceil(maxLineWidth + strokeWidth).toInt().coerceAtLeast(1)
+
         val outlineLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
-            
+
         val fillLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
@@ -2530,7 +2525,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
 
         val textLayer = Bitmap.createBitmap(layerWidth, outlineLayout.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         val textCanvas = Canvas(textLayer)
-        
+
         outlineLayout.draw(textCanvas)
         fillLayout.draw(textCanvas)
 
@@ -2538,14 +2533,19 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val singleLineHeight = (textSizePx / ss).roundToInt()
         val singleLineBaseline = height - bottomMargin - singleLineHeight
 
-        val left = ((width - textWidth) / 2f)
-        val dstHeight = (textLayer.height / ss.toFloat()).roundToInt().coerceAtLeast(1)
-        val idealTop = singleLineBaseline - dstHeight / 2 + singleLineHeight / 2
-        val edgeMargin = (singleLineHeight * 0.25f).roundToInt().coerceAtLeast(1)
+        // Natural render size, only shrunk if it's actually wider than the screen
+        val naturalWidth = layerWidth / ss.toFloat()
+        val dstWidth = naturalWidth.coerceAtMost(width.toFloat())
+        val scale = dstWidth / naturalWidth
+        val dstHeight = (textLayer.height / ss.toFloat()) * scale
+
+        val left = (width - dstWidth) / 2f
+        val idealTop = singleLineBaseline - dstHeight / 2f + singleLineHeight / 2f
+        val edgeMargin = (singleLineHeight * 0.25f).coerceAtLeast(1f)
         val maxTop = (height - dstHeight - edgeMargin).coerceAtLeast(edgeMargin)
         val top = idealTop.coerceIn(edgeMargin, maxTop)
-        val dst = RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
-        
+        val dst = RectF(left, top, left + dstWidth, top + dstHeight)
+
         canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         textLayer.recycle()
         return bitmap
