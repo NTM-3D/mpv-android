@@ -2756,13 +2756,6 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             .apply()
     }
 
-    private fun isColorLight(color: Int): Boolean {
-        val r = Color.red(color)
-        val g = Color.green(color)
-        val b = Color.blue(color)
-        return (r * 0.299 + g * 0.587 + b * 0.114) > 186
-    }
-
     // Image subtitle settings are saved per opened file (like the last playback
     // position), rather than as a single global default, so each file remembers
     // its own values. A new/never-seen file falls back to the hardcoded defaults
@@ -3091,9 +3084,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         sizeValue.text = if (subtitleSize >= 0) "+$subtitleSize" else "$subtitleSize"
 
         fun updateColorButtonAppearance() {
-            colorPickerButton.text = "0x${Integer.toHexString(subtitleColor).uppercase().padStart(8, '0')}"
             colorPickerButton.backgroundTintList = ColorStateList.valueOf(subtitleColor)
-            colorPickerButton.setTextColor(if (isColorLight(subtitleColor)) Color.BLACK else Color.WHITE)
         }
 
         updateColorButtonAppearance()
