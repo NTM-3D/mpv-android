@@ -220,7 +220,6 @@
 
                         <Button
                             android:id="@+id/colorPickerButton"
-                            style="?android:attr/borderlessButtonStyle"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:insetTop="0dp"
