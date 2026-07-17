@@ -2471,46 +2471,47 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val textWidth = (width * 0.9f).toInt().coerceAtLeast(1)
         val ss = 2
         val textSizePx = width * 0.045f * ss
-        
+        val strokeWidth = textSizePx * 0.08f // Reduced to 8% for a smaller, cleaner outline
+
         // Outline paint
-        val outlinePaint = android.graphics.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.DITHER_FLAG).apply {
-            color = android.graphics.Color.argb(200, 42, 42, 42)
+        val outlinePaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+            color = Color.argb(200, 42, 42, 42) // Dark gray, slightly transparent
             textSize = textSizePx
-            textAlign = android.graphics.Paint.Align.LEFT
+            textAlign = Paint.Align.LEFT
             isLinearText = true
-            style = android.graphics.Paint.Style.STROKE
-            strokeWidth = textSizePx * 0.08f
-            strokeJoin = android.graphics.Paint.Join.ROUND
-            strokeCap = android.graphics.Paint.Cap.ROUND
+            style = Paint.Style.STROKE
+            this.strokeWidth = strokeWidth
+            strokeJoin = Paint.Join.ROUND
+            strokeCap = Paint.Cap.ROUND
             
-            // Correct API for hinting
-            setHinting(android.graphics.Paint.HINTING_ON)
+            // Verified Android API calls
+            setHinting(Paint.HINTING_ON) 
             letterSpacing = 0.04f
-            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD) // True bold, works on all API levels
         }
 
         // Fill paint
-        val textPaint = android.graphics.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.DITHER_FLAG).apply {
-            color = android.graphics.Color.parseColor("#E0E0E0")
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+            color = Color.parseColor("#E0E0E0") // Light gray
             textSize = textSizePx
-            textAlign = android.graphics.Paint.Align.LEFT
+            textAlign = Paint.Align.LEFT
             isLinearText = true
-            style = android.graphics.Paint.Style.FILL
+            style = Paint.Style.FILL
             
-            // Correct API for hinting
-            setHinting(android.graphics.Paint.HINTING_ON)
+            // Verified Android API calls
+            setHinting(Paint.HINTING_ON)
             letterSpacing = 0.04f
-            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
         }
 
         val layerWidth = textWidth * ss
-        val outlineLayout = android.text.StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
-            .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
+        val outlineLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
             
-        val fillLayout = android.text.StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
-            .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
+        val fillLayout = StaticLayout.Builder.obtain(text, 0, text.length, textPaint, layerWidth)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .build()
 
@@ -2530,9 +2531,9 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val edgeMargin = (singleLineHeight * 0.25f).roundToInt().coerceAtLeast(1)
         val maxTop = (height - dstHeight - edgeMargin).coerceAtLeast(edgeMargin)
         val top = idealTop.coerceIn(edgeMargin, maxTop)
-        val dst = android.graphics.RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
+        val dst = RectF(left, top.toFloat(), left + textWidth, (top + dstHeight).toFloat())
         
-        canvas.drawBitmap(textLayer, null, dst, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
+        canvas.drawBitmap(textLayer, null, dst, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         textLayer.recycle()
         return bitmap
     }
