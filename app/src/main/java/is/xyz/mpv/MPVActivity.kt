@@ -2509,11 +2509,20 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
-        // Size the layout to the longest line's natural width, so StaticLayout has no reason to wrap it
-        val lines = text.split("\n")
-        val maxLineWidth = lines.maxOf { outlinePaint.measureText(it) }
+        // Measure the real, natural width using StaticLayout itself — build it once with a
+        // width no line could ever exceed, so it is structurally guaranteed not to wrap.
+        val safeWidth = Int.MAX_VALUE / 2
+        val measureLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, safeWidth)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
+            .setIncludePad(false)
+            .build()
+        var maxLineWidth = 0f
+        for (i in 0 until measureLayout.lineCount) {
+            maxLineWidth = maxOf(maxLineWidth, measureLayout.getLineWidth(i))
+        }
         val layerWidth = ceil(maxLineWidth + strokeWidth).toInt().coerceAtLeast(1)
 
+        // Rebuild at that exact natural width — same measurement source, so no mismatch is possible.
         val outlineLayout = StaticLayout.Builder.obtain(text, 0, text.length, outlinePaint, layerWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
@@ -2534,6 +2543,7 @@ class MPVActivity : AppCompatActivity(), MPVLib.EventObserver, TouchGesturesObse
         val singleLineHeight = (textSizePx / ss).roundToInt()
         val singleLineBaseline = height - bottomMargin - singleLineHeight
 
+        // True 1:1 render size — uniform unscale of supersampling only, nothing else.
         val dstWidth = layerWidth / ss.toFloat()
         val dstHeight = textLayer.height / ss.toFloat()
 
