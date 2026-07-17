@@ -244,10 +244,13 @@
                         android:insetBottom="0dp"
                         android:paddingTop="0dp"
                         android:paddingBottom="0dp"
-                        android:paddingStart="16dp"
+                        android:paddingStart="8dp"
                         android:paddingEnd="16dp"
                         android:layout_marginStart="8dp"
+                        android:background="@android:color/transparent"
                         android:foreground="@null"
+                        android:stateListAnimator="@null"
+                        android:elevation="0dp"
                         android:textAllCaps="false"
                         android:text="Reset" />
                 </LinearLayout>
