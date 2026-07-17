@@ -372,7 +372,7 @@ class LeiaTextureRenderer {
                         // u_Texture uses GL_LINEAR filtering, so sampling exactly at the y=0.5 seam
                         // blends the last row of one eye with the first row of the other, leaking a
                         // row across eyes. Inset the seam-facing edge of each half by half a texel.
-                        float texelHalfY = 1 / 1600.0; // matches MPVView's fixed SurfaceTexture buffer height
+                        float texelHalfY = 0.5 / 1600.0; // matches MPVView's fixed SurfaceTexture buffer height
                         if (u_SwapImages == 0) {
                             if (contentCoord.x < 0.5) {
                                 coord.x = contentCoord.x * 2.0;
@@ -427,8 +427,15 @@ class LeiaTextureRenderer {
                     // (scale > 1 zooms in) without distorting the aspect ratio.
                     float anchorY = 0.85;
                     float anchorX = 0.5;
-                    // Compress scale effect to 1/4 strength
-                    float effectiveScale = 0.5 + (u_SubtitleScale - 1.0) / 4.0;
+                    // Compress scale effect to half strength around a neutral point of 1.0
+                    // (u_SubtitleScale == 1.0 must yield effectiveScale == 1.0, i.e. no
+                    // artificial zoom, otherwise the subtitle texture gets minified far
+                    // more than the SBS eye-squeeze alone requires, and mipmap filtering
+                    // blurs it no matter how much detail the source bitmap has).
+                    // u_SubtitleScale ranges [0, 2], so this keeps effectiveScale in
+                    // [0.5, 1.5] — safely away from 0 (which would blow up the division
+                    // below) while still giving the slider a usable range.
+                    float effectiveScale = 1.0 + (u_SubtitleScale - 1.0) / 2.0;
                     float scaleY = (posY - anchorY) / effectiveScale + anchorY;
                     float scaleX = (eyeX - anchorX) / effectiveScale + anchorX;
                     vec2 subCoord;
