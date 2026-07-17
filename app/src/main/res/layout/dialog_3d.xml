@@ -216,16 +216,19 @@
                         android:layout_width="78dp"
                         android:layout_height="46dp"
                         android:background="#000000"
-                        android:padding="1dp">
+                        android:padding="2dp">
 
                         <Button
                             android:id="@+id/colorPickerButton"
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
+                            android:background="@android:color/white"
                             android:insetLeft="0dp"
                             android:insetRight="0dp"
                             android:insetTop="0dp"
-                            android:insetBottom="0dp" />
+                            android:insetBottom="0dp"
+                            android:stateListAnimator="@null"
+                            android:elevation="0dp" />
                     </FrameLayout>
 
                     <Button
